@@ -1372,17 +1372,17 @@
                 }
             },
 
-            sendMessage: function (text) {
-                /* Responsible for sending off a text message.
+            sendMessageToJID: function (text, jid) {
+                /* Constructs the actual message stanza and then send it off to
+                 * a specific resource (as specified with a full JID) or to a
+                 * bare jid.
                  *
                  *  Parameters:
                  *    (string) text - The chat message text.
+                 *    (string) jid - The JID of the recipient.
                  */
-                // TODO: We might want to send to specfic resources. Especially
-                // in the OTR case.
                 var timestamp = (new Date()).getTime();
-                var bare_jid = this.model.get('jid');
-                var message = $msg({from: converse.connection.jid, to: bare_jid, type: 'chat', id: timestamp})
+                var message = $msg({'from': converse.connection.jid, 'to': jid, 'type': 'chat', 'id': timestamp})
                     .c('body').t(text).up()
                     .c(ACTIVE, {'xmlns': Strophe.NS.CHATSTATES}).up();
 
@@ -1393,11 +1393,31 @@
                 converse.connection.send(message);
                 if (converse.forward_messages) {
                     // Forward the message, so that other connected resources are also aware of it.
-                    var forwarded = $msg({to:converse.bare_jid, type:'chat', id:timestamp})
+                    var forwarded = $msg({to:converse.jid, type:'chat', id:timestamp})
                                     .c('forwarded', {xmlns:'urn:xmpp:forward:0'})
                                     .c('delay', {xmns:'urn:xmpp:delay',stamp:timestamp}).up()
                                     .cnode(message.tree());
                     converse.connection.send(forwarded);
+                }
+            },
+
+            sendMessage: function (text) {
+                /* Responsible for sending off a text message.
+                 * Finds known resources for the recipient and sends a message
+                 * stanza to each of them.
+                 *
+                 *  Parameters:
+                 *    (string) text - The chat message text.
+                 */
+                var bare_jid = this.model.get('jid');
+                // XXX: sometimes we have null as a resource, need to get to the bottom of that.
+                var resources = _.filter(this.model.get('resources'), function (r) { return r !== null; });
+                if (resources.length) {
+                    _.each(resources, function (resource) {
+                        this.sendMessageToJID(text, bare_jid+'/'+resource);
+                    }.bind(this));
+                } else {
+                    this.sendMessageToJID(text, bare_jid);
                 }
             },
 
