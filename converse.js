@@ -1291,7 +1291,10 @@
                 if (this.$el.find('.vcard-info').length) {
                     return this.returnToChat();
                 }
+                var contact = converse.roster.get(this.model.get('jid'));
                 $chat_body.children().addClass('hidden');
+                // debugger;
+                // var vcardjson = utils.xml2json(contact.get('vcard'));
                 $chat_body.append(converse.templates.vcard(
                     _.extend(this.model.toJSON(), {
                         info_vcard: __('VCard information for this person'),
