@@ -119,6 +119,44 @@
             return str;
         },
 
+        renderCanvas: function (type, data, dx, dy, dWidth, dHeight) {
+            /* Create a HTML canvas element and render an image inside it.
+             *
+             * Parameters:
+             *      (String) type - the image type
+             *      (Base64 String) data - the image data
+             *      (Number) dx - The X coordinate in the destination canvas at which to
+             *                    place the top-left corner of the source image.
+             *      (Number) dy - The Y coordinate in the destination canvas at which to
+             *                    place the top-left corner of the source image.
+             *      (Number) dWidth - The width to draw the image in the destination canvas. This
+             *                        allows scaling of the drawn image. If not specified, the
+             *                        image is not scaled in width when drawn.
+             *      (Number) dHeight - The height to draw the image in the destination canvas.
+             *                         This allows scaling of the drawn image. If not specified,
+             *                         the image is not scaled in height when drawn.
+             */
+            dHeight = dHeight || 0;
+            dWidth = dWidth || 0;
+            var img_src = 'data:'+type+';base64,'+data,
+                canvas = $('<canvas></canvas>').get(0);
+            if (!(canvas.getContext && canvas.getContext('2d'))) {
+                return canvas;
+            }
+            var ctx = canvas.getContext('2d');
+            var img = new Image();
+            img.onload = function () {
+                var ratio = img.width/img.height;
+                if (ratio < 1) {
+                    ctx.drawImage(img, dx, dy, dWidth, dHeight*(1/ratio));
+                } else {
+                    ctx.drawImage(img, dx, dy, dWidth, dHeight*ratio);
+                }
+            };
+            img.src = img_src;
+            return canvas;
+        },
+
         webForm2xForm: function (field) {
             /* Takes an HTML DOM and turns it into an XForm field.
             *

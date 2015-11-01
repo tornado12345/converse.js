@@ -573,7 +573,8 @@
                                 'image_type': img_type,
                                 'image': img,
                                 'url': url,
-                                'vcard_updated': moment().format()
+                                'vcard_updated': moment().format(),
+                                'vcard': $vcard.length ? $vcard[0] : null
                             });
                         }
                     }
@@ -1253,6 +1254,7 @@
                 this.$el.attr('id', this.model.get('box_id'))
                     .html(converse.templates.chatbox(
                             _.extend(this.model.toJSON(), {
+                                    use_vcards: converse.use_vcards,
                                     show_toolbar: converse.show_toolbar,
                                     info_close: __('Close this chat box'),
                                     info_minimize: __('Minimize this chat box'),
@@ -1271,6 +1273,19 @@
                 return this.showStatusMessage();
             },
 
+            renderVCardProfile: function () {
+                if (!this.model.get('image')) {
+                    return;
+                }
+                var canvas = utils.renderCanvas(
+                    this.model.get('image_type'),
+                    this.model.get('image'),
+                    0, 0
+                );
+                canvas.className = "vcard-profile";
+                return canvas;
+            },
+
             renderVCard: function () {
                 var $chat_body = this.$el.find('.chat-body');
                 if (this.$el.find('.vcard-info').length) {
@@ -1279,9 +1294,13 @@
                 $chat_body.children().addClass('hidden');
                 $chat_body.append(converse.templates.vcard(
                     _.extend(this.model.toJSON(), {
+                        info_vcard: __('VCard information for this person'),
+                        label_fullname: __('Full name'),
+                        label_url: __('URL'),
                         label_return: __('Return to chat')
                     })
                 ));
+                $chat_body.find('.vcard-info fieldset:first').append(this.renderVCardProfile());
                 $chat_body.find('input[type=button]').on('click', this.returnToChat.bind(this));
                 return this;
             },
@@ -2104,24 +2123,14 @@
                 if (!this.model.get('image')) {
                     return;
                 }
-                var img_src = 'data:'+this.model.get('image_type')+';base64,'+this.model.get('image'),
-                    canvas = $('<canvas height="32px" width="32px" class="avatar"></canvas>').get(0);
-
-                if (!(canvas.getContext && canvas.getContext('2d'))) {
-                    return this;
-                }
-                var ctx = canvas.getContext('2d');
-                var img = new Image();   // Create new Image object
-                img.onload = function () {
-                    var ratio = img.width/img.height;
-                    if (ratio < 1) {
-                        ctx.drawImage(img, 0,0, 32, 32*(1/ratio));
-                    } else {
-                        ctx.drawImage(img, 0,0, 32, 32*ratio);
-                    }
-
-                };
-                img.src = img_src;
+                var canvas = utils.renderCanvas(
+                    this.model.get('image_type'),
+                    this.model.get('image'),
+                    0, 0, 32, 32
+                );
+                canvas.setAttribute('height', "32px");
+                canvas.setAttribute('width', "32px");
+                canvas.className = "avatar";
                 this.$el.find('.chat-title').before(canvas);
                 return this;
             },
