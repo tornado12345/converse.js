@@ -7,7 +7,7 @@
 /*global Backbone, define */
 
 (function (root, factory) {
-    define("converse-chat", ["converse-core", "converse-api"], factory);
+    define("converse-chatview", ["converse-core", "converse-api"], factory);
 }(this, function (converse, converse_api) {
     "use strict";
     var $ = converse_api.env.jQuery,
@@ -24,7 +24,7 @@
     };
 
 
-    converse_api.plugins.add('chat', {
+    converse_api.plugins.add('chatview', {
 
         overrides: {
             // Overrides mentioned here will be picked up by converse.js's
