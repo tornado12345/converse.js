@@ -12,7 +12,7 @@
             "converse-api",
             "converse-rosterview",
             // TODO: remove this dependency
-            "converse-chat"
+            "converse-chatview"
     ], factory);
 }(this, function (converse, converse_api) {
     "use strict";

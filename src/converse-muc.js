@@ -14,7 +14,7 @@
             "converse-core",
             "converse-api",
             // TODO remove next two dependencies
-            "converse-chat", 
+            "converse-chatview", 
             "converse-controlbox"
     ], factory);
 }(this, function (converse, converse_api) {
