@@ -1,25 +1,48 @@
 // Converse.js (A browser based XMPP chat client)
 // http://conversejs.org
 //
-// Copyright (c) 2012-2016, Jan-Carel Brand <jc@opkode.com>
+// Copyright (c) 2012-2017, Jan-Carel Brand <jc@opkode.com>
 // Licensed under the Mozilla Public License (MPLv2)
 //
-/*global define, window */
+/*global define, window, document */
 
 (function (root, factory) {
-    define("converse-dragresize", [
-            "converse-core",
-            "converse-api",
+    define(["converse-core",
+            "tpl!dragresize",
             "converse-chatview",
-            "converse-muc", // XXX: would like to remove this
             "converse-controlbox"
     ], factory);
-}(this, function (converse, converse_api) {
+}(this, function (converse, tpl_dragresize) {
     "use strict";
-    var $ = converse_api.env.jQuery,
-        _ = converse_api.env._;
+    const { _ } = converse.env;
 
-    converse_api.plugins.add('converse-dragresize', {
+    function renderDragResizeHandles (_converse, view) {
+        const flyout = view.el.querySelector('.box-flyout');
+        const div = document.createElement('div');
+        div.innerHTML = tpl_dragresize();
+        flyout.insertBefore(
+            div,
+            flyout.firstChild
+        );
+    }
+
+
+    converse.plugins.add('converse-dragresize', {
+        /* Plugin dependencies are other plugins which might be
+         * overridden or relied upon, and therefore need to be loaded before
+         * this plugin.
+         *
+         * If the setting "strict_plugin_dependencies" is set to true,
+         * an error will be raised if the plugin is not found. By default it's
+         * false, which means these plugins are only loaded opportunistically.
+         *
+         * NB: These plugins need to have already been loaded via require.js.
+         */
+        dependencies: ["converse-chatview", "converse-headline", "converse-muc-views"],
+
+        enabled (_converse) {
+            return _converse.view_mode == 'overlayed';
+        },
 
         overrides: {
             // Overrides mentioned here will be picked up by converse.js's
@@ -28,45 +51,48 @@
             //
             // New functions which don't exist yet can also be added.
 
-            registerGlobalEventHandlers: function () {
-                $(document).on('mousemove', function (ev) {
-                    if (!this.resizing || !this.allow_dragresize) { return true; }
-                    ev.preventDefault();
-                    this.resizing.chatbox.resizeChatBox(ev);
-                }.bind(this));
+            registerGlobalEventHandlers () {
+                const that = this;
 
-                $(document).on('mouseup', function (ev) {
-                    if (!this.resizing || !this.allow_dragresize) { return true; }
+                document.addEventListener('mousemove', function (ev) {
+                    if (!that.resizing || !that.allow_dragresize) { return true; }
                     ev.preventDefault();
-                    var height = this.applyDragResistance(
-                            this.resizing.chatbox.height,
-                            this.resizing.chatbox.model.get('default_height')
+                    that.resizing.chatbox.resizeChatBox(ev);
+                });
+
+                document.addEventListener('mouseup', function (ev) {
+                    if (!that.resizing || !that.allow_dragresize) { return true; }
+                    ev.preventDefault();
+                    const height = that.applyDragResistance(
+                            that.resizing.chatbox.height,
+                            that.resizing.chatbox.model.get('default_height')
                     );
-                    var width = this.applyDragResistance(
-                            this.resizing.chatbox.width,
-                            this.resizing.chatbox.model.get('default_width')
+                    const width = that.applyDragResistance(
+                            that.resizing.chatbox.width,
+                            that.resizing.chatbox.model.get('default_width')
                     );
-                    if (this.connection.connected) {
-                        this.resizing.chatbox.model.save({'height': height});
-                        this.resizing.chatbox.model.save({'width': width});
+                    if (that.connection.connected) {
+                        that.resizing.chatbox.model.save({'height': height});
+                        that.resizing.chatbox.model.save({'width': width});
                     } else {
-                        this.resizing.chatbox.model.set({'height': height});
-                        this.resizing.chatbox.model.set({'width': width});
+                        that.resizing.chatbox.model.set({'height': height});
+                        that.resizing.chatbox.model.set({'width': width});
                     }
-                    this.resizing = null;
-                }.bind(this));
+                    that.resizing = null;
+                });
 
                 return this.__super__.registerGlobalEventHandlers.apply(this, arguments);
             },
 
             ChatBox: {
-                initialize: function () {
-                    var result = this.__super__.initialize.apply(this, arguments),
+                initialize () {
+                    const { _converse } = this.__super__;
+                    const result = this.__super__.initialize.apply(this, arguments),
                         height = this.get('height'), width = this.get('width'),
                         save = this.get('id') === 'controlbox' ? this.set.bind(this) : this.save.bind(this);
                     save({
-                        'height': converse.applyDragResistance(height, this.get('default_height')),
-                        'width': converse.applyDragResistance(width, this.get('default_width')),
+                        'height': _converse.applyDragResistance(height, this.get('default_height')),
+                        'width': _converse.applyDragResistance(width, this.get('default_width')),
                     });
                     return result;
                 }
@@ -79,90 +105,101 @@
                     'mousedown .dragresize-topleft': 'onStartDiagonalResize'
                 },
 
-                initialize: function () {
-                    $(window).on('resize', _.debounce(this.setDimensions.bind(this), 100));
+                initialize () {
+                    window.addEventListener('resize', _.debounce(this.setDimensions.bind(this), 100));
                     this.__super__.initialize.apply(this, arguments);
                 },
 
-                render: function () {
-                    var result = this.__super__.render.apply(this, arguments);
+                render () {
+                    const result = this.__super__.render.apply(this, arguments);
+                    renderDragResizeHandles(this.__super__._converse, this);
                     this.setWidth();
                     return result;
                 },
 
-                setWidth: function () {
+                setWidth () {
                     // If a custom width is applied (due to drag-resizing),
                     // then we need to set the width of the .chatbox element as well.
                     if (this.model.get('width')) {
-                        this.$el.css('width', this.model.get('width'));
+                        this.el.style.width = this.model.get('width');
                     }
                 },
 
-                _show: function () {
+                _show () {
                     this.initDragResize().setDimensions();
                     this.__super__._show.apply(this, arguments);
                 },
 
-                initDragResize: function () {
+                initDragResize () {
                     /* Determine and store the default box size.
                      * We need this information for the drag-resizing feature.
                      */
-                    var $flyout = this.$el.find('.box-flyout');
-                    if (typeof this.model.get('height') === 'undefined') {
-                        var height = $flyout.height();
-                        var width = $flyout.width();
+                    const { _converse } = this.__super__,
+                          flyout = this.el.querySelector('.box-flyout'),
+                          style = window.getComputedStyle(flyout);
+
+                    if (_.isUndefined(this.model.get('height'))) {
+                        const height = parseInt(style.height.replace(/px$/, ''), 10),
+                              width = parseInt(style.width.replace(/px$/, ''), 10);
                         this.model.set('height', height);
                         this.model.set('default_height', height);
                         this.model.set('width', width);
                         this.model.set('default_width', width);
                     }
-                    var min_width = $flyout.css('min-width');
-                    var min_height = $flyout.css('min-height');
+                    const min_width = style['min-width'];
+                    const min_height = style['min-height'];
                     this.model.set('min_width', min_width.endsWith('px') ? Number(min_width.replace(/px$/, '')) :0);
                     this.model.set('min_height', min_height.endsWith('px') ? Number(min_height.replace(/px$/, '')) :0);
                     // Initialize last known mouse position
                     this.prev_pageY = 0;
                     this.prev_pageX = 0;
-                    if (converse.connection.connected) {
+                    if (_converse.connection.connected) {
                         this.height = this.model.get('height');
                         this.width = this.model.get('width');
                     }
                     return this;
                 },
 
-                setDimensions: function () {
+                setDimensions () {
                     // Make sure the chat box has the right height and width.
                     this.adjustToViewport();
                     this.setChatBoxHeight(this.model.get('height'));
                     this.setChatBoxWidth(this.model.get('width'));
                 },
 
-                setChatBoxHeight: function (height) {
+                setChatBoxHeight (height) {
+                    const { _converse } = this.__super__;
                     if (height) {
-                        height = converse.applyDragResistance(height, this.model.get('default_height'))+'px';
+                        height = _converse.applyDragResistance(height, this.model.get('default_height'))+'px';
                     } else {
                         height = "";
                     }
-                    this.$el.children('.box-flyout')[0].style.height = height;
+                    const flyout_el = this.el.querySelector('.box-flyout');
+                    if (!_.isNull(flyout_el)) {
+                        flyout_el.style.height = height;
+                    }
                 },
 
-                setChatBoxWidth: function (width) {
+                setChatBoxWidth (width) {
+                    const { _converse } = this.__super__;
                     if (width) {
-                        width = converse.applyDragResistance(width, this.model.get('default_width'))+'px';
+                        width = _converse.applyDragResistance(width, this.model.get('default_width'))+'px';
                     } else {
                         width = "";
                     }
-                    this.$el[0].style.width = width;
-                    this.$el.children('.box-flyout')[0].style.width = width;
+                    this.el.style.width = width;
+                    const flyout_el = this.el.querySelector('.box-flyout');
+                    if (!_.isNull(flyout_el)) {
+                        flyout_el.style.width = width;
+                    }
                 },
 
-
-                adjustToViewport: function () {
+                adjustToViewport () {
                     /* Event handler called when viewport gets resized. We remove
                      * custom width/height from chat boxes.
                      */
-                    var viewport_width = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
-                    var viewport_height = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
+                    const viewport_width = Math.max(document.documentElement.clientWidth, window.innerWidth || 0);
+                    const viewport_height = Math.max(document.documentElement.clientHeight, window.innerHeight || 0);
                     if (viewport_width <= 480) {
                         this.model.set('height', undefined);
                         this.model.set('width', undefined);
@@ -173,36 +210,44 @@
                     }
                 },
 
-                onStartVerticalResize: function (ev) {
-                    if (!converse.allow_dragresize) { return true; }
+                onStartVerticalResize (ev) {
+                    const { _converse } = this.__super__;
+                    if (!_converse.allow_dragresize) { return true; }
                     // Record element attributes for mouseMove().
-                    this.height = this.$el.children('.box-flyout').height();
-                    converse.resizing = {
+                    const flyout = this.el.querySelector('.box-flyout'),
+                          style = window.getComputedStyle(flyout);
+                    this.height = parseInt(style.height.replace(/px$/, ''), 10);
+                    _converse.resizing = {
                         'chatbox': this,
                         'direction': 'top'
                     };
                     this.prev_pageY = ev.pageY;
                 },
 
-                onStartHorizontalResize: function (ev) {
-                    if (!converse.allow_dragresize) { return true; }
-                    this.width = this.$el.children('.box-flyout').width();
-                    converse.resizing = {
+                onStartHorizontalResize (ev) {
+                    const { _converse } = this.__super__;
+                    if (!_converse.allow_dragresize) { return true; }
+                    const flyout = this.el.querySelector('.box-flyout'),
+                          style = window.getComputedStyle(flyout);
+                    this.width = parseInt(style.width.replace(/px$/, ''), 10);
+                    _converse.resizing = {
                         'chatbox': this,
                         'direction': 'left'
                     };
                     this.prev_pageX = ev.pageX;
                 },
 
-                onStartDiagonalResize: function (ev) {
+                onStartDiagonalResize (ev) {
+                    const { _converse } = this.__super__;
                     this.onStartHorizontalResize(ev);
                     this.onStartVerticalResize(ev);
-                    converse.resizing.direction = 'topleft';
+                    _converse.resizing.direction = 'topleft';
                 },
 
-                resizeChatBox: function (ev) {
-                    var diff;
-                    if (converse.resizing.direction.indexOf('top') === 0) {
+                resizeChatBox (ev) {
+                    let diff;
+                    const { _converse } = this.__super__;
+                    if (_converse.resizing.direction.indexOf('top') === 0) {
                         diff = ev.pageY - this.prev_pageY;
                         if (diff) {
                             this.height = ((this.height-diff) > (this.model.get('min_height') || 0)) ? (this.height-diff) : this.model.get('min_height');
@@ -210,7 +255,7 @@
                             this.setChatBoxHeight(this.height);
                         }
                     }
-                    if (converse.resizing.direction.indexOf('left') !== -1) {
+                    if (_.includes(_converse.resizing.direction, 'left')) {
                         diff = this.prev_pageX - ev.pageX;
                         if (diff) {
                             this.width = ((this.width+diff) > (this.model.get('min_width') || 0)) ? (this.width+diff) : this.model.get('min_width');
@@ -221,6 +266,26 @@
                 }
             },
 
+            HeadlinesBoxView: {
+                events: {
+                    'mousedown .dragresize-top': 'onStartVerticalResize',
+                    'mousedown .dragresize-left': 'onStartHorizontalResize',
+                    'mousedown .dragresize-topleft': 'onStartDiagonalResize'
+                },
+
+                initialize () {
+                    window.addEventListener('resize', _.debounce(this.setDimensions.bind(this), 100));
+                    return this.__super__.initialize.apply(this, arguments);
+                },
+
+                render () {
+                    const result = this.__super__.render.apply(this, arguments);
+                    renderDragResizeHandles(this.__super__._converse, this);
+                    this.setWidth();
+                    return result;
+                }
+            },
+
             ControlBoxView: {
                 events: {
                     'mousedown .dragresize-top': 'onStartVerticalResize',
@@ -228,19 +293,26 @@
                     'mousedown .dragresize-topleft': 'onStartDiagonalResize'
                 },
 
-                initialize: function () {
-                    $(window).on('resize', _.debounce(this.setDimensions.bind(this), 100));
+                initialize () {
+                    window.addEventListener('resize', _.debounce(this.setDimensions.bind(this), 100));
                     this.__super__.initialize.apply(this, arguments);
                 },
 
-                renderLoginPanel: function () {
-                    var result = this.__super__.renderLoginPanel.apply(this, arguments);
+                render () {
+                    const result = this.__super__.render.apply(this, arguments);
+                    renderDragResizeHandles(this.__super__._converse, this);
+                    this.setWidth();
+                    return result;
+                },
+
+                renderLoginPanel () {
+                    const result = this.__super__.renderLoginPanel.apply(this, arguments);
                     this.initDragResize().setDimensions();
                     return result;
                 },
 
-                renderContactsPanel: function () {
-                    var result = this.__super__.renderContactsPanel.apply(this, arguments);
+                renderControlBoxPane () {
+                    const result = this.__super__.renderControlBoxPane.apply(this, arguments);
                     this.initDragResize().setDimensions();
                     return result;
                 }
@@ -253,39 +325,41 @@
                     'mousedown .dragresize-topleft': 'onStartDiagonalResize'
                 },
 
-                initialize: function () {
-                    $(window).on('resize', _.debounce(this.setDimensions.bind(this), 100));
+                initialize () {
+                    window.addEventListener('resize', _.debounce(this.setDimensions.bind(this), 100));
                     this.__super__.initialize.apply(this, arguments);
                 },
 
-                render: function () {
-                    var result = this.__super__.render.apply(this, arguments);
+                render () {
+                    const result = this.__super__.render.apply(this, arguments);
+                    renderDragResizeHandles(this.__super__._converse, this);
                     this.setWidth();
                     return result;
                 }
             }
         },
 
-
-        initialize: function () {
+        initialize () {
             /* The initialize function gets called as soon as the plugin is
              * loaded by converse.js's plugin machinery.
              */
-            var converse = this.converse;
-            this.updateSettings({
+            const { _converse } = this;
+
+            _converse.api.settings.update({
                 allow_dragresize: true,
             });
-            converse.applyDragResistance = function (value, default_value) {
+
+            _converse.applyDragResistance = function (value, default_value) {
                 /* This method applies some resistance around the
                 * default_value. If value is close enough to
                 * default_value, then default_value is returned instead.
                 */
-                if (typeof value === 'undefined') {
+                if (_.isUndefined(value)) {
                     return undefined;
-                } else if (typeof default_value === 'undefined') {
+                } else if (_.isUndefined(default_value)) {
                     return value;
                 }
-                var resistance = 10;
+                const resistance = 10;
                 if ((value !== default_value) &&
                     (Math.abs(value- default_value) < resistance)) {
                     return default_value;

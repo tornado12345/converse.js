@@ -2,52 +2,66 @@
 
     <div id="banner"><a href="https://github.com/jcbrand/converse.js/blob/master/docs/source/theming.rst">Edit me on GitHub</a></div>
 
+=============================
 The converse.js developer API
 =============================
-
-.. contents:: Table of Contents
-   :depth: 2
-   :local:
 
 .. note:: The API documented here is available in Converse.js 0.8.4 and higher.
         Earlier versions of Converse.js might have different API methods or none at all.
 
-In the Converse.js API, you traverse towards a logical grouping, from
-which you can then call certain standardised accessors and mutators, such as::
+.. note:: From version 3.0.0 and onwards many API methods have been made
+        private and available to plugins only. This means that if you want to
+        use the API, you'll first need to create a plugin from which you can
+        access it. This change is done to avoid leakage of sensitive data to
+        malicious or non-whitelisted scripts.
+
+The Converse.js API is broken up into different logical "groupings" (for
+example ``converse.plugins`` or ``converse.contacts``).
+
+There are some exceptions to this, like ``converse.initialize``, which aren't
+groupings but single methods.
+
+The groupings logically group methods, such as standardised accessors and
+mutators::
 
     .get
     .set
     .add
     .remove
 
-This is done to increase readability and to allow intuitive method chaining.
+So for example, to get a contact, you would do the following::
 
-For example, to get a contact, you would do the following::
-
-    converse.contacts.get('jid@example.com');
+    _converse.api.contacts.get('jid@example.com');
 
 To get multiple contacts, just pass in an array of jids::
 
-    converse.contacts.get(['jid1@example.com', 'jid2@example.com']);
+    _converse.api.contacts.get(['jid1@example.com', 'jid2@example.com']);
 
 To get all contacts, simply call ``get`` without any jids::
 
-    converse.contacts.get();
+    _converse.api.contacts.get();
 
 
-**Here follows now a breakdown of all API groupings and methods**:
+Public API methods
+==================
 
+Publich API methods are those methods that are accessible on the global
+``window.converse`` object. They are public, because any JavaScript in the page
+can call them. Public methods therefore don't expose any sensitive or closured
+data. To do that, you'll need to create a plugin, which has access to the
+private API method.
+
+.. _`initialize`:
 
 initialize
 ----------
 
-.. note:: This method is the one exception of a method which is not logically grouped
-    as explained above.
+.. note:: This method is the one exception of a method which is not logically grouped as explained above.
 
-Initializes converse.js. This method must always be called when using
-converse.js.
+Publich API method which initializes converse.js.
+This method must always be called when using converse.js.
 
-The `initialize` method takes a map (also called a hash or dictionary) of :ref:`configuration-variables`.
+The `initialize` method takes a map of :ref:`configuration-settings`.
 
 Example:
 
@@ -68,6 +82,71 @@ Example:
             roster_groups: true
         });
 
+
+The **plugin** grouping
+------------------------
+
+Exposes methods for adding and removing plugins. You'll need to write a plugin
+if you want to have access to the private API methods defined further down below.
+
+For more information on plugins, read the section :ref:`writing-a-plugin`.
+
+add
+~~~
+
+Registers a new plugin.
+
+.. code-block:: javascript
+
+    var plugin = {
+        initialize: function () {
+            // method on any plugin (if it exists) as soon as the plugin has
+            // been loaded.
+
+            // Inside this method, you have access to the closured
+            // _converse object, which contains the core logic and data
+            // structures of converse.js
+        }
+    }
+    converse.plugins.add('myplugin', plugin);
+
+
+Private API methods
+===================
+
+The private API methods are only accessible via the closured ``_converse``
+object, which is only available to plugins.
+
+These methods are kept private (i.e. not global) because they may return
+sensitive data which should be kept off-limits to other 3rd-party scripts
+that might be running in the page.
+
+.. note:: The example code snippets shown below are a bit contrived. I've added
+    the minimum plugin boilerplace around the actual example, to show that
+    these API methods can only be called inside a plugin where the
+    ``_converse`` object is available. However, sometimes other considerations
+    need to be made as well. For example, for certain API methods it is
+    necessary to first wait until the data has been received from the XMPP
+    server (or from the browser's sessionStorage cache). Due to
+    time-constriaints these limitations are ignored in the examples below. For
+    a fuller picture, refer to the section :ref:`events-API` as well.
+
+emit
+----
+
+This method allows you to emit events, which can be listened to via
+``_converse.api.listen.on`` or ``_converse.api.listen.once``.
+
+For example:
+
+.. code-block:: javascript
+
+    _converse.emit('foo-completed');
+
+Additionally, if a promise has been registered under the same name
+(via ``_converse.api.promises.add``), then that promise will also be resolved
+when calling ``emit``.
+
 send
 ----
 
@@ -77,12 +156,55 @@ For example, to send a message stanza:
 
 .. code-block:: javascript
 
-    var msg = converse.env.$msg({
-        from: 'juliet@example.com/balcony',
-        to:'romeo@example.net',
-        type:'chat'
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            var msg = converse.env.$msg({
+                from: 'juliet@example.com/balcony',
+                to:'romeo@example.net',
+                type:'chat'
+            });
+            this._converse.api.send(msg);
+
+        }
     });
-    converse.send(msg);
+
+.. _`waituntil-grouping`:
+
+waitUntil
+---------
+
+This method can be used to wait for promises. Promises are similar to events
+(for event handling, refer to the :ref:`listen-grouping`), but they differ in
+two important ways:
+
+* A promise gets resolved only once, whereas events can fire multiple times.
+* A handler registered for a promise, will still fire *after* the promise has
+  been resolved, which is not the case with an event handler.
+
+Converse.js has the following promises:
+
+* :ref:`cachedRoster`
+* :ref:`chatBoxesFetched`
+* :ref:`pluginsInitialized`
+* :ref:`roster`
+* :ref:`rosterContactsFetched`
+* :ref:`rosterGroupsFetched`
+* :ref:`rosterInitialized`
+* :ref:`statusInitialized`
+* :ref:`roomsPanelRendered` (only via the `converse-muc` plugin)
+
+Below is an example from `converse-muc.js <https://github.com/jcbrand/converse.js/blob/master/src/converse-muc.js>`_
+where the `rosterContactsFetched` promise is waited on. The method
+`this.initInviteWidget` will initialize the chatroom invitation widget.
+
+.. code-block:: javascript
+
+    _converse.api.waitUntil('rosterContactsFetched').then(this.initInviteWidget.bind(this));
+
+The line above executes only once a chatroom has been opened and entered, so
+using an event handler here would not work, since the event might have fired
+already by that time.
 
 
 The **archive** grouping
@@ -92,7 +214,7 @@ Converse.js supports the *Message Archive Management*
 (`XEP-0313 <https://xmpp.org/extensions/xep-0313.html>`_) protocol,
 through which it is able to query an XMPP server for archived messages.
 
-See also the **message_archiving** option in the :ref:`configuration-variables` section, which you'll usually
+See also the **message_archiving** option in the :ref:`configuration-settings` section, which you'll usually
 want to  in conjunction with this API.
 
 query
@@ -122,15 +244,21 @@ the returned messages.
 
 .. code-block:: javascript
 
-    var errback = function (iq) {
-        // The query was not successful, perhaps inform the user?
-        // The IQ stanza returned by the XMPP server is passed in, so that you
-        // may inspect it and determine what the problem was.
-    }
-    var callback = function (messages) {
-        // Do something with the messages, like showing them in your webpage.
-    }
-    converse.archive.query(callback, errback))
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            var errback = function (iq) {
+                // The query was not successful, perhaps inform the user?
+                // The IQ stanza returned by the XMPP server is passed in, so that you
+                // may inspect it and determine what the problem was.
+            }
+            var callback = function (messages) {
+                // Do something with the messages, like showing them in your webpage.
+            }
+            this._converse.api.archive.query(callback, errback))
+
+        }
+    });
 
 
 **Waiting until server support has been determined**
@@ -151,7 +279,17 @@ For example:
 
 .. code-block:: javascript
 
-    converse.listen.on('serviceDiscovered', function (event, feature) {
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            var _converse = this._converse;
+            _converse.api.listen.on('serviceDiscovered', function (feature) {
+                if (feature.get('var') === converse.env.Strophe.NS.MAM) {
+                    _converse.api.archive.query()
+                }
+            });
+
+    converse.listen.on('serviceDiscovered', function (feature) {
         if (feature.get('var') === converse.env.Strophe.NS.MAM) {
             converse.archive.query()
         }
@@ -165,27 +303,40 @@ room under the  ``with`` key.
 
 .. code-block:: javascript
 
-    // For a particular user
-    converse.archive.query({'with': 'john@doe.net'}, callback, errback);)
 
-    // For a particular room
-    converse.archive.query({'with': 'discuss@conference.doglovers.net'}, callback, errback);)
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            // For a particular user
+            this._converse.api.archive.query({'with': 'john@doe.net'}, callback, errback);)
+
+            // For a particular room
+            this._converse.api.archive.query({'with': 'discuss@conference.doglovers.net'}, callback, errback);)
+
+        }
+    });
 
 
 **Requesting all archived messages before or after a certain date**
 
 The ``start`` and ``end`` parameters are used to query for messages
 within a certain timeframe. The passed in date values may either be ISO8601
-formatted date strings, or Javascript Date objects.
+formatted date strings, or JavaScript Date objects.
 
 .. code-block:: javascript
 
-    var options = {
-        'with': 'john@doe.net',
-        'start': '2010-06-07T00:00:00Z',
-        'end': '2010-07-07T13:23:54Z'
-    };
-    converse.archive.query(options, callback, errback);
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            var options = {
+                'with': 'john@doe.net',
+                'start': '2010-06-07T00:00:00Z',
+                'end': '2010-07-07T13:23:54Z'
+            };
+            this._converse.api.archive.query(options, callback, errback);
+
+        }
+    });
 
 
 **Limiting the amount of messages returned**
@@ -195,9 +346,14 @@ By default, the messages are returned from oldest to newest.
 
 .. code-block:: javascript
 
-    // Return maximum 10 archived messages
-    converse.archive.query({'with': 'john@doe.net', 'max':10}, callback, errback);
+    converse.plugins.add('myplugin', {
+        initialize: function () {
 
+            // Return maximum 10 archived messages
+            this._converse.api.archive.query({'with': 'john@doe.net', 'max':10}, callback, errback);
+
+        }
+    });
 
 **Paging forwards through a set of archived messages**
 
@@ -216,14 +372,21 @@ to limit your results.
 
 .. code-block:: javascript
 
-    var callback = function (messages, rsm) {
-        // Do something with the messages, like showing them in your webpage.
-        // ...
-        // You can now use the returned "rsm" object, to fetch the next batch of messages:
-        converse.archive.query(rsm.next(10), callback, errback))
+    converse.plugins.add('myplugin', {
+        initialize: function () {
 
-    }
-    converse.archive.query({'with': 'john@doe.net', 'max':10}, callback, errback);
+            var _converse = this._converse;
+            var callback = function (messages, rsm) {
+                // Do something with the messages, like showing them in your webpage.
+                // ...
+                // You can now use the returned "rsm" object, to fetch the next batch of messages:
+                _converse.api.archive.query(rsm.next(10), callback, errback))
+
+            }
+            _converse.api.archive.query({'with': 'john@doe.net', 'max':10}, callback, errback);
+
+        }
+    });
 
 **Paging backwards through a set of archived messages**
 
@@ -234,15 +397,22 @@ message, pass in the ``before`` parameter with an empty string value ``''``.
 
 .. code-block:: javascript
 
-    converse.archive.query({'before': '', 'max':5}, function (message, rsm) {
-        // Do something with the messages, like showing them in your webpage.
-        // ...
-        // You can now use the returned "rsm" object, to fetch the previous batch of messages:
-        rsm.previous(5); // Call previous method, to update the object's parameters,
-                         // passing in a limit value of 5.
-        // Now we query again, to get the previous batch.
-        converse.archive.query(rsm, callback, errback);
-    }
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            var _converse = this._converse;
+            _converse.api.archive.query({'before': '', 'max':5}, function (message, rsm) {
+                // Do something with the messages, like showing them in your webpage.
+                // ...
+                // You can now use the returned "rsm" object, to fetch the previous batch of messages:
+                rsm.previous(5); // Call previous method, to update the object's parameters,
+                                // passing in a limit value of 5.
+                // Now we query again, to get the previous batch.
+                _converse.api.archive.query(rsm, callback, errback);
+            }
+
+        }
+    });
 
 The **connection** grouping
 ---------------------------
@@ -261,6 +431,81 @@ disconnect
 Terminates the connection.
 
 
+The **disco** grouping
+----------------------
+
+This grouping collects API functions related to `service discovery
+<https://xmpp.org/extensions/xep-0030.html>`_.
+
+getIdentity
+~~~~~~~~~~~
+
+Paramters:
+
+* (String) category
+* (String) type
+* (String) entity JID
+
+Get the identity (with the given category and type) for a given disco entity.
+
+For example, when determining support for PEP (personal eventing protocol), you
+want to know whether the user's own JID has an identity with
+``category='pubsub'`` and ``type='pep'`` as explained in this section of
+XEP-0163: https://xmpp.org/extensions/xep-0163.html#support
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            _converse.api.disco.getIdentity('pubsub', 'pep', _converse.bare_jid).then(
+                function (identity) {
+                    if (_.isNil(identity)) {
+                        // The entity DOES NOT have this identity
+                    } else {
+                        // The entity DOES have this identity
+                    }
+                }
+            ).catch(_.partial(_converse.log, _, Strophe.LogLevel.FATAL));
+        }
+    });
+
+supports
+~~~~~~~~
+
+Used to determine whether an entity supports a given feature.
+
+Returns a `Promise` which, when resolved, returns a map/object with keys
+`supported` (a boolean) and `feature` which is a `Backbone.Model <http://backbonejs.org/#Model>`_.
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            _converse.api.disco.supports(Strophe.NS.MAM, _converse.bare_jid).then(
+                function (value) {
+                    // `value` is a map with two keys, `supported` and `feature`.
+
+                    if (value.supported) {
+                        // The feature is supported
+                    } else {
+                        // The feature is not supported
+                    }
+                },
+                function () { // Error
+                    _converse.log(
+                        "Error or timeout while checking for feature support",
+                        Strophe.LogLevel.ERROR
+                    );
+                }
+            ).catch((msg) => {
+                _converse.log(msg, Strophe.LogLevel.FATAL);
+            });
+        }
+    });
+
+
 The **user** grouping
 ---------------------
 
@@ -273,8 +518,13 @@ Return's the current user's full JID (Jabber ID).
 
 .. code-block:: javascript
 
-    converse.user.jid()
-    // Returns for example jc@opkode.com/conversejs-351236
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            alert(this._converse.api.user.jid());
+
+        }
+    });
 
 login
 ~~~~~
@@ -283,9 +533,15 @@ Logs the user in. This method can accept a map with the credentials, like this:
 
 .. code-block:: javascript
 
-    converse.user.login({
-        'jid': 'dummy@example.com',
-        'password': 'secret'
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            this._converse.api.user.login({
+                'jid': 'dummy@example.com',
+                'password': 'secret'
+            });
+
+        }
     });
 
 or it can be called without any parameters, in which case converse.js will try
@@ -299,7 +555,13 @@ Log the user out of the current XMPP session.
 
 .. code-block:: javascript
 
-    converse.user.logout();
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            this._converse.api.user.logout();
+
+        }
+    });
 
 
 The **status** sub-grouping
@@ -314,7 +576,13 @@ Return the current user's availability status:
 
 .. code-block:: javascript
 
-    converse.user.status.get(); // Returns for example "dnd"
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            alert(this._converse.api.user.status.get()); // For example "dnd"
+
+        }
+    });
 
 set
 ^^^
@@ -332,7 +600,13 @@ For example:
 
 .. code-block:: javascript
 
-    converse.user.status.set('dnd');
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            this._converse.api.user.status.set('dnd');
+
+        }
+    });
 
 Because the user's availability is often set together with a custom status
 message, this method also allows you to pass in a status message as a
@@ -340,7 +614,13 @@ second parameter:
 
 .. code-block:: javascript
 
-    converse.user.status.set('dnd', 'In a meeting');
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            this._converse.api.user.status.set('dnd', 'In a meeting');
+
+        }
+    });
 
 The **message** sub-grouping
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -350,9 +630,13 @@ retrieving the user's custom status message.
 
 .. code-block:: javascript
 
-    converse.user.status.message.set('In a meeting');
-
-    converse.user.status.message.get(); // Returns "In a meeting"
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+            this._converse.api.user.status.message.set('In a meeting');
+            // Returns "In a meeting"
+            return this._converse.api.user.status.message.get();
+        }
+    });
 
 
 The **contacts** grouping
@@ -367,22 +651,53 @@ To get a single roster contact, call the method with the contact's JID (Jabber I
 
 .. code-block:: javascript
 
-    converse.contacts.get('buddy@example.com')
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            var _converse = this._converse;
+            _converse.api.listen.on('rosterContactsFetched', function () {
+                var contact = _converse.api.contacts.get('buddy@example.com')
+            });
+
+        }
+    });
 
 To get multiple contacts, pass in an array of JIDs:
 
 .. code-block:: javascript
 
-    converse.contacts.get(['buddy1@example.com', 'buddy2@example.com'])
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            var _converse = this._converse;
+            _converse.api.listen.on('rosterContactsFetched', function () {
+                var contacts = _converse.api.contacts.get(
+                    ['buddy1@example.com', 'buddy2@example.com']
+                )
+            });
+
+        }
+    });
 
 To return all contacts, simply call ``get`` without any parameters:
 
 .. code-block:: javascript
 
-    converse.contacts.get()
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            var _converse = this._converse;
+            _converse.api.listen.on('rosterContactsFetched', function () {
+                var contacts = _converse.api.contacts.get();
+            });
+
+        }
+    });
 
 
-The returned roster contact objects have these attributes:
+The returned roster contact is a `Backbone.Model <http://backbonejs.org/#Model>`_ of type _converse.RosterContacts.
+
+It has the following attributes (which should be accessed via `get <http://backbonejs.org/#Model-get>`_).
 
 +----------------+-----------------------------------------------------------------------------------------------------------------+
 | Attribute      |                                                                                                                 |
@@ -427,201 +742,151 @@ Provide the JID of the contact you want to add:
 
 .. code-block:: javascript
 
-    converse.contacts.add('buddy@example.com')
+    _converse.api.contacts.add('buddy@example.com')
 
 You may also provide the fullname. If not present, we use the jid as fullname:
 
 .. code-block:: javascript
 
-    converse.contacts.add('buddy@example.com', 'Buddy')
+    _converse.api.contacts.add('buddy@example.com', 'Buddy')
 
 The **chats** grouping
 ----------------------
 
-Note, for MUC chat rooms, you need to use the "rooms" grouping instead.
+Note, for MUC chatrooms, you need to use the "rooms" grouping instead.
 
 get
 ~~~
 
-Returns an object representing a chat box.
+Returns an object representing a chatbox. The chatbox should already be open.
 
-To return a single chat box, provide the JID of the contact you're chatting
-with in that chat box:
-
-.. code-block:: javascript
-
-    converse.chats.get('buddy@example.com')
-
-To return an array of chat boxes, provide an array of JIDs:
+To return a single chatbox, provide the JID of the contact you're chatting
+with in that chatbox:
 
 .. code-block:: javascript
 
-    converse.chats.get(['buddy1@example.com', 'buddy2@example.com'])
+    _converse.api.chats.get('buddy@example.com')
 
-To return all open chat boxes, call the method without any JIDs::
+To return an array of chatboxes, provide an array of JIDs:
 
-    converse.chats.get()
+.. code-block:: javascript
+
+    _converse.api.chats.get(['buddy1@example.com', 'buddy2@example.com'])
+
+To return all open chatboxes, call the method without any JIDs::
+
+    _converse.api.chats.get()
 
 open
 ~~~~
 
-Opens a chat box and returns an object representing a chat box.
+Opens a chatbox and returns a `Backbone.View <http://backbonejs.org/#View>`_ object
+representing a chatbox.
 
-To open a single chat box, provide the JID of the contact:
+Note that converse doesn't allow opening chats with users who aren't in your roster
+(unless you have set :ref:`allow_non_roster_messaging` to ``true``).
+
+Before opening a chat, you should first wait until the roster has been populated.
+This is the :ref:`rosterContactsFetched` event/promise.
+
+Besides that, it's a good idea to also first wait until already opened chatboxes
+(which are cached in sessionStorage) have also been fetched from the cache.
+This is the :ref:`chatBoxesFetched` event/promise.
+
+These two events fire only once per session, so they're also available as promises.
+
+So, to open a single chatbox:
 
 .. code-block:: javascript
 
-    converse.chats.open('buddy@example.com')
+    converse.plugins.add('myplugin', {
+      initialize: function() {
+        var _converse = this._converse;
+        Promise.all([
+            _converse.api.waitUntil('rosterContactsFetched'),
+            _converse.api.waitUntil('chatBoxesFetched')
+        ]).then(function() {
+            // Note, buddy@example.org must be in your contacts roster!
+            _converse.api.chats.open('buddy@example.com')
+        });
+      }
+    });
 
-To return an array of chat boxes, provide an array of JIDs:
+To return an array of chatboxes, provide an array of JIDs:
 
 .. code-block:: javascript
 
-    converse.chats.open(['buddy1@example.com', 'buddy2@example.com'])
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+            var _converse = this._converse;
+            Promise.all([
+                _converse.api.waitUntil('rosterContactsFetched'),
+                _converse.api.waitUntil('chatBoxesFetched')
+            ]).then(function() {
+                // Note, these users must first be in your contacts roster!
+                _converse.api.chats.open(['buddy1@example.com', 'buddy2@example.com'])
+            });
+        }
+    });
 
 
-*The returned chat box object contains the following methods:*
+*The returned chatbox object contains the following methods:*
 
-+-------------+------------------------------------------+
-| Method      | Description                              |
-+=============+==========================================+
-| endOTR      | End an OTR (Off-the-record) session.     |
-+-------------+------------------------------------------+
-| get         | Get an attribute (i.e. accessor).        |
-+-------------+------------------------------------------+
-| initiateOTR | Start an OTR (off-the-record) session.   |
-+-------------+------------------------------------------+
-| maximize    | Minimize the chat box.                   |
-+-------------+------------------------------------------+
-| minimize    | Maximize the chat box.                   |
-+-------------+------------------------------------------+
-| set         | Set an attribute (i.e. mutator).         |
-+-------------+------------------------------------------+
-| close       | Close the chat box.                      |
-+-------------+------------------------------------------+
-| open        | Opens the chat box.                      |
-+-------------+------------------------------------------+
++-------------------+------------------------------------------+
+| Method            | Description                              |
++===================+==========================================+
+| close             | Close the chatbox.                       |
++-------------------+------------------------------------------+
+| focus             | Focuses the chatbox textarea             |
++-------------------+------------------------------------------+
+| model.endOTR      | End an OTR (Off-the-record) session.     |
++-------------------+------------------------------------------+
+| model.get         | Get an attribute (i.e. accessor).        |
++-------------------+------------------------------------------+
+| model.initiateOTR | Start an OTR (off-the-record) session.   |
++-------------------+------------------------------------------+
+| model.maximize    | Minimize the chatbox.                    |
++-------------------+------------------------------------------+
+| model.minimize    | Maximize the chatbox.                    |
++-------------------+------------------------------------------+
+| model.set         | Set an attribute (i.e. mutator).         |
++-------------------+------------------------------------------+
+| show              | Opens/shows the chatbox.                 |
++-------------------+------------------------------------------+
 
 *The get and set methods can be used to retrieve and change the following attributes:*
 
 +-------------+-----------------------------------------------------+
 | Attribute   | Description                                         |
 +=============+=====================================================+
-| height      | The height of the chat box.                         |
+| height      | The height of the chatbox.                          |
 +-------------+-----------------------------------------------------+
-| url         | The URL of the chat box heading.                    |
+| url         | The URL of the chatbox heading.                     |
 +-------------+-----------------------------------------------------+
 
-The **rooms** grouping
-----------------------
+The **chatviews** grouping
+--------------------------
+
+.. note:: This is only for private chats.
 
 get
 ~~~
 
-Returns an object representing a multi user chat box (room).
-It takes 3 parameters:
+Returns a `Backbone.View <http://backbonejs.org/#View>`_ of type _converse.ChatBoxView.
 
-* the room JID (if not specified, all rooms will be returned).
-* a map (object) containing any extra room attributes For example, if you want
-  to specify the nickname, use ``{'nick': 'bloodninja'}``. Previously (before
-  version 1.0.7, the second parameter only accepted the nickname (as a string
-  value). This is currently still accepted, but then you can't pass in any
-  other room attributes. If the nickname is not specified then the node part of
-  the user's JID will be used.
-* a boolean, indicating whether the room should be created if not found (default: `false`)
+The chat should already be open, otherwise `undefined` will be returned.
+
+To return a single view, provide the JID of the contact:
 
 .. code-block:: javascript
 
-    var nick = 'dread-pirate-roberts';
-    var create_if_not_found = true;
-    converse.rooms.open('group@muc.example.com', {'nick': nick}, create_if_not_found)
+    _converse.api.chatviews.get('buddy@example.com')
 
-open
-~~~~
-
-Opens a multi user chat box and returns an object representing it.
-Similar to chats.get API
-
-It takes 2 parameters:
-
-* the room JID (if not specified, all rooms will be returned).
-* a map (object) containing any extra room attributes. For example, if you want
-  to specify the nickname, use ``{'nick': 'bloodninja'}``.
-
-To open a single multi user chat box, provide the JID of the room:
+To return an array of views, provide an array of JIDs:
 
 .. code-block:: javascript
 
-    converse.rooms.open('group@muc.example.com')
-
-To return an array of rooms, provide an array of room JIDs:
-
-.. code-block:: javascript
-
-    converse.rooms.open(['group1@muc.example.com', 'group2@muc.example.com'])
-
-To setup a custom nickname when joining the room, provide the optional nick argument:
-
-.. code-block:: javascript
-
-    converse.rooms.open('group@muc.example.com', {'nick': 'mycustomnick'})
-
-close
-~~~~~
-
-Lets you close open chat rooms. You can call this method without any arguments
-to close all open chat rooms, or you can specify a single JID or an array of
-JIDs.
-
-The **settings** grouping
--------------------------
-
-This grouping allows you to get or set the configuration settings of converse.js.
-
-get(key)
-~~~~~~~~
-
-Returns the value of a configuration settings. For example:
-
-.. code-block:: javascript
-
-    converse.settings.get("play_sounds"); // default value returned would be false;
-
-set(key, value) or set(object)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Set one or many configuration settings. For example:
-
-.. code-block:: javascript
-
-    converse.settings.set("play_sounds", true);
-
-or :
-
-.. code-block:: javascript
-
-    converse.settings.set({
-        "play_sounds", true,
-        "hide_offline_users" true
-    });
-
-Note, this is not an alternative to calling ``converse.initialize``, which still needs
-to be called. Generally, you'd use this method after converse.js is already
-running and you want to change the configuration on-the-fly.
-
-The **tokens** grouping
------------------------
-
-get
-~~~
-
-Returns a token, either the RID or SID token depending on what's asked for.
-
-Example:
-
-.. code-block:: javascript
-
-    converse.tokens.get('rid')
+    _converse.api.chatviews.get(['buddy1@example.com', 'buddy2@example.com'])
 
 
 .. _`listen-grouping`:
@@ -629,7 +894,7 @@ Example:
 The **listen** grouping
 -----------------------
 
-Converse.js emits events to which you can subscribe from your own Javascript.
+Converse.js emits events to which you can subscribe from your own JavaScript.
 
 Concerning events, the following methods are available under the "listen"
 grouping:
@@ -650,7 +915,7 @@ grouping:
 
 .. code-block:: javascript
 
-        converse.listen.on('message', function (event, messageXML) { ... });
+        _converse.api.listen.on('message', function (messageXML) { ... });
 
 * **once(eventName, callback, [context])**:
 
@@ -667,7 +932,7 @@ grouping:
 
 .. code-block:: javascript
 
-        converse.listen.once('message', function (event, messageXML) { ... });
+        _converse.api.listen.once('message', function (messageXML) { ... });
 
 * **not(eventName, callback)**
 
@@ -682,5 +947,377 @@ grouping:
 
 .. code-block:: javascript
 
-        converse.listen.not('message', function (event, messageXML) { ... });
+        _converse.api.listen.not('message', function (messageXML) { ... });
 
+
+The **rooms** grouping
+----------------------
+
+get
+~~~
+
+Returns an object representing a multi user chatbox (room).
+It takes 3 parameters:
+
+* the room JID (if not specified, all rooms will be returned).
+* a map (object) containing any extra room attributes For example, if you want
+  to specify the nickname, use ``{'nick': 'bloodninja'}``. Previously (before
+  version 1.0.7, the second parameter only accepted the nickname (as a string
+  value). This is currently still accepted, but then you can't pass in any
+  other room attributes. If the nickname is not specified then the node part of
+  the user's JID will be used.
+* a boolean, indicating whether the room should be created if not found (default: `false`)
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+
+        initialize: function () {
+            var _converse = this._converse;
+            _converse.api.waitUntil('roomsAutoJoined').then(function () {
+                var create_if_not_found = true;
+                this._converse.api.rooms.get(
+                    'group@muc.example.com',
+                    {'nick': 'dread-pirate-roberts'},
+                    create_if_not_found
+                )
+            });
+        }
+    });
+
+open
+~~~~
+
+Opens a multi user chatbox and returns an object representing it.
+Similar to the ``chats.get`` API.
+
+It takes 2 parameters:
+
+* The room JID or JIDs (if not specified, all currently open rooms will be returned).
+* A map (object) containing any extra room attributes. For example, if you want
+  to specify the nickname, use ``{'nick': 'bloodninja'}``.
+
+To open a single multi user chatbox, provide the JID of the room:
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            this._converse.api.rooms.open('group@muc.example.com')
+
+        }
+    });
+
+To return an array of rooms, provide an array of room JIDs:
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            this._converse.api.rooms.open(['group1@muc.example.com', 'group2@muc.example.com'])
+
+        }
+    });
+
+To setup a custom nickname when joining the room, provide the optional nick argument:
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            this._converse.api.rooms.open('group@muc.example.com', {'nick': 'mycustomnick'})
+
+        }
+    });
+
+Room attributes that may be passed in:
+
+* *nick*: The nickname to be used
+* *auto_configure*: A boolean, indicating whether the room should be configured
+  automatically or not. If set to ``true``, then it makes sense to pass in
+  configuration settings.
+* *roomconfig*: A map of configuration settings to be used when the room gets
+  configured automatically. Currently it doesn't make sense to specify
+  ``roomconfig`` values if ``auto_configure`` is set to ``false``.
+  For a list of configuration values that can be passed in, refer to these values
+  in the `XEP-0045 MUC specification <http://xmpp.org/extensions/xep-0045.html#registrar-formtype-owner>`_.
+  The values should be named without the ``muc#roomconfig_`` prefix.
+* *maximize*: A boolean, indicating whether minimized rooms should also be
+  maximized, when opened. Set to ``false`` by default.
+* *bring_to_foreground*: A boolean indicating whether the room should be
+  brought to the foreground and therefore replace the currently shown chat.
+  If there is no chat currently open, then this option is ineffective.
+
+For example, opening a room with a specific default configuration:
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            this._converse.api.rooms.open(
+                'myroom@conference.example.org',
+                { 'nick': 'coolguy69',
+                  'auto_configure': true,
+                  'roomconfig': {
+                      'changesubject': false,
+                      'membersonly': true,
+                      'persistentroom': true,
+                      'publicroom': true,
+                      'roomdesc': 'Comfy room for hanging out',
+                      'whois': 'anyone'
+                  }
+                },
+                true
+            );
+
+        }
+    });
+
+
+.. note:: `multi-list` configuration values are not yet supported.
+
+close
+~~~~~
+
+Lets you close open chatrooms. You can call this method without any arguments
+to close all open chatrooms, or you can specify a single JID or an array of
+JIDs.
+
+.. _`promises-grouping`:
+
+The **promises** grouping
+-------------------------
+
+Converse.js and its plugins emit various events which you can listen to via the
+:ref:`listen-grouping`.
+
+Some of these events are also available as `ES2015 Promises <http://es6-features.org/#PromiseUsage>`_,
+although not all of them could logically act as promises, since some events
+might be fired multpile times whereas promises are to be resolved (or
+rejected) only once.
+
+The core events, which are also promises are:
+
+* :ref:`cachedRoster`
+* :ref:`chatBoxesFetched`
+* :ref:`pluginsInitialized`
+* :ref:`roster`
+* :ref:`rosterContactsFetched`
+* :ref:`rosterGroupsFetched`
+* :ref:`rosterInitialized`
+* :ref:`statusInitialized`
+* :ref:`roomsPanelRendered` (only via the `converse-muc` plugin)
+
+The various plugins might also provide promises, and they do this by using the
+``promises.add`` api method.
+
+add(promises)
+~~~~~~~~~~~~~
+
+By calling ``promises.add``, a new promise is made available for other code or
+plugins to depend on via the ``_converse.api.waitUntil`` method.
+
+This method accepts either a string or list of strings which specify the
+promise(s) to be added.
+
+For example:
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+            this._converse.api.promises.add('foo-completed');
+        }
+    });
+
+Generally, it's the responsibility of the plugin which adds the promise to
+also resolve it.
+
+This is done by calling ``_converse.api.emit``, which not only resolve the
+promise, but also emit an event with the same name (which can be listened to
+via ``_converse.api.listen``).
+
+For example:
+
+.. code-block:: javascript
+
+    _converse.api.emit('foo-completed');
+
+
+The **settings** grouping
+-------------------------
+
+This grouping allows access to the configuration settings of converse.js.
+
+.. _`settings-update`:
+
+update(settings)
+~~~~~~~~~~~~~~~~
+
+Allows new configuration settings to be specified, or new default values for
+existing configuration settings to be specified.
+
+For example:
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+            this._converse.api.settings.update({
+                'enable_foo': true
+            });
+        }
+    });
+
+The user can then override the default value of the configuration setting when
+calling `converse.initialize`.
+
+For example:
+
+.. code-block:: javascript
+
+    converse.initialize({
+        'enable_foo': false
+    });
+
+
+get(key)
+~~~~~~~~
+
+Returns the value of a configuration settings. For example:
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            // default value would be false;
+            alert(this._converse.api.settings.get("play_sounds"));
+
+        }
+    });
+
+set(key, value) or set(object)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Set one or many configuration settings. For example:
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            this._converse.api.settings.set("play_sounds", true);
+
+        }
+    });
+
+or :
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            this._converse.api.settings.set({
+                "play_sounds", true,
+                "hide_offline_users" true
+            });
+
+        }
+    });
+
+Note, this is not an alternative to calling ``converse.initialize``, which still needs
+to be called. Generally, you'd use this method after converse.js is already
+running and you want to change the configuration on-the-fly.
+
+The **tokens** grouping
+-----------------------
+
+get
+~~~
+
+Returns a token, either the RID or SID token depending on what's asked for.
+
+Example:
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            alert(this._converse.api.tokens.get('rid'));
+
+        }
+    });
+
+
+The **vcard** grouping
+-----------------------
+
+get
+~~~
+
+Parameters:
+
+* ``model`` either a `Backbone.Model` instance, or a string JID.
+* ``force`` (optional), a boolean indicating whether the vcard should be
+  fetched even if it's been fetched before.
+
+Returns a Promise which results with the VCard data for a particular JID or for
+a `Backbone.Model` instance which represents an entity with a JID (such as a roster contact,
+chatbox or chatroom occupant).
+
+If a `Backbone.Model` instance is passed in, then it must have either a `jid`
+attribute or a `muc_jid` attribute.
+
+Example:
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            _converse.api.waitUntil('rosterContactsFetched').then(() => {
+                this._converse.api.vcard.get('someone@example.org').then(
+                    (vcard) => {
+                        // Do something with the vcard...
+                    }
+                );
+            });
+
+        }
+    });
+
+update
+~~~~~~
+
+Parameters:
+
+* ``model`` a `Backbone.Model` instance
+* ``force`` (optional), a boolean indicating whether the vcard should be
+  fetched again even if it's been fetched before.
+
+Fetches the VCard associated with a particular `Backbone.Model` instance
+(by using its `jid` or `muc_jid` attribute) and then updates the model with the
+returned VCard data.
+
+Returns a promise;
+
+Example:
+
+.. code-block:: javascript
+
+    converse.plugins.add('myplugin', {
+        initialize: function () {
+
+            _converse.api.waitUntil('rosterContactsFetched').then(() => {
+                const chatbox = _converse.chatboxes.getChatBox('someone@example.org');
+                _converse.api.vcard.update(chatbox);
+            });
+        }
+    });

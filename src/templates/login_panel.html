@@ -1,23 +1,33 @@
-<form class="pure-form pure-form-stacked converse-form" id="converse-login" method="post">
-    {[ if (auto_login) { ]}
-        <span class="spinner login-submit"/>
-    {[ } ]}
-    {[ if (!auto_login) { ]}
-        {[ if (authentication == LOGIN || authentication == EXTERNAL) { ]}
-            <label>{{label_username}}</label>
-            <input type="text" name="jid" placeholder="{{placeholder_username}}">
-            {[ if (authentication !== EXTERNAL) { ]}
-                <label>{{label_password}}</label>
-                <input type="password" name="password" placeholder="{{placeholder_password}}">
+<div id="converse-login-panel" class="controlbox-pane fade-in row">
+    <form id="converse-login" class="converse-form" method="post">
+        <div class="conn-feedback fade-in {[ if (!o.conn_feedback_subject) { ]} hidden {[ } ]} {{{o.conn_feedback_class}}}">
+            <p class="feedback-subject">{{{ o.conn_feedback_subject }}}</p>
+            <p class="feedback-message {[ if (!o.conn_feedback_message) { ]} hidden {[ } ]}">{{{o.conn_feedback_message}}}</p>
+        </div>
+        {[ if (o.auto_login || o._converse.CONNECTION_STATUS[o.connection_status] === 'CONNECTING') { ]}
+            <span class="spinner fa fa-spinner centered"/>
+        {[ } else { ]}
+            {[ if (o.authentication == o.LOGIN || o.authentication == o.EXTERNAL) { ]}
+                <div class="form-group">
+                    <label for="jid">{{{o.__("XMPP Username:")}}}</label>
+                    <input class="form-control" autofocus required="required" type="text" name="jid" placeholder="{{{o.placeholder_username}}}">
+                </div>
+                {[ if (o.authentication !== o.EXTERNAL) { ]}
+                <div class="form-group">
+                    <label for="password">{{{o.__("Password:")}}}</label>
+                    <input class="form-control" required="required" type="password" name="password" placeholder="{{{o.__('password')}}}">
+                </div>
+                {[ } ]}
+                <fieldset class="buttons">
+                    <input class="btn btn-primary" type="submit" value="{{{o.__('Submit')}}}">
+                </fieldset>
             {[ } ]}
-            <input class="pure-button button-primary" type="submit" value="{{label_login}}">
-            <span class="conn-feedback"></span>
+            {[ if (o.authentication == o.ANONYMOUS) { ]}
+                <input class="btn btn-primary login-anon" type="submit" value="{{{o.__('Click here to log in anonymously')}}}"/>
+            {[ } ]}
+            {[ if (o.authentication == o.PREBIND) { ]}
+                <p>Disconnected.</p>
+            {[ } ]}
         {[ } ]}
-        {[ if (authentication == ANONYMOUS) { ]}
-            <input type="pure-button button-primary" class="submit login-anon" value="{{label_anon_login}}"/>
-        {[ } ]}
-        {[ if (authentication == PREBIND) { ]}
-            <p>Disconnected.</p>
-        {[ } ]}
-    {[ } ]}
-</form>
+    </form>
+</div>

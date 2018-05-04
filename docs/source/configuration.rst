@@ -6,11 +6,7 @@
 Configuration
 =============
 
-.. contents:: Table of Contents
-   :depth: 2
-   :local:
-
-The included minified JS and CSS files can be used for demoing or testing, but
+The included minified JavaScript and CSS files can be used for demoing or testing, but
 you'll want to configure *Converse.js* to suit your needs before you deploy it
 on your website.
 
@@ -19,17 +15,17 @@ on your website.
 You'll most likely want to call the *initialize* method in your HTML page. For
 an example of how this is done, please see the bottom of the *./index.html* page.
 
-Please refer to the `Configuration variables`_ section below for info on
+Please refer to the `Configuration settings`_ section below for info on
 all the available configuration settings.
 
 After you have configured *Converse.js*, you'll have to regenerate the minified
-JS file so that it will include the new settings. Please refer to the
+JavaScript file so that it will include the new settings. Please refer to the
 :ref:`minification` section for more info on how to do this.
 
-.. _`configuration-variables`:
+.. _`configuration-settings`:
 
-Configuration variables
-=======================
+Configuration settings
+======================
 
 authentication
 --------------
@@ -114,6 +110,16 @@ Here's an example of converse.js being initialized with these three options:
         allow_logout: false
     });
 
+allow_bookmarks
+---------------
+
+* Default:  ``true``
+
+Enables/disables chatroom bookmarks functionality.
+This setting is only applicable if the ``converse-bookmarks`` plugin is loaded.
+
+See also: `allow_public_bookmarks`_
+
 allow_chat_pending_contacts
 ---------------------------
 
@@ -127,7 +133,7 @@ allow_contact_removal
 * Default:  ``true``
 
 Allow the user to remove roster contacts by clicking on the delete icon
-(i.e. traschcan) next to a contact's name in the roster.
+(i.e. trashcan) next to a contact's name in the roster.
 
 allow_contact_requests
 ----------------------
@@ -145,7 +151,7 @@ allow_dragresize
 * Default: ``true``
 
 Allow users to resize chats by dragging the edges. The min-height and min-width
-CSS properties set on a chat boxes (specifically on the ``#converse.js .chatbox > .box-flyout`` element)
+CSS properties set on a chatboxes (specifically on the ``#converse.js .chatbox > .box-flyout`` element)
 will be honored, IF they are set in pixels.
 
 allow_muc
@@ -161,9 +167,23 @@ allow_muc_invitations
 
 * Default:  ``true``
 
-Allows users to be invited to join MUC chat rooms. An "Invite" widget will
-appear in the sidebar of the chat room where you can type in the JID of a user
-to invite into the chat room.
+Allows users to be invited to join MUC chatrooms. An "Invite" widget will
+appear in the sidebar of the chatroom where you can type in the JID of a user
+to invite into the chatroom.
+
+.. _`allow_non_roster_messaging`:
+
+allow_non_roster_messaging
+--------------------------
+
+* Default:  ``false``
+
+Determines whether you'll receive messages from users that are not in your
+roster. The XMPP specification allows for this (similar to email).
+Setting this to `true` increases your chances of receiving spam (when using a
+federated server), while setting it to `false` means that people not on your
+roster can't contact you unless one (or both) of you subscribe to one another's
+presence (i.e. adding as a roster contact).
 
 allow_otr
 ---------
@@ -171,6 +191,24 @@ allow_otr
 * Default:  ``true``
 
 Allow Off-the-record encryption of single-user chat messages.
+
+allow_public_bookmarks
+----------------------
+
+* Default: ``false``
+
+Some XMPP servers don't support private PEP/PubSub nodes, as required for
+private bookmarks and outlined in `XEP-0223 <https://xmpp.org/extensions/xep-0223.html>`_.
+
+Even though Converse.js asks for the bookmarks to be kept private (via the
+`<publish-options>` XML node), the server simply ignores the privacy settings
+and publishes the node contents under the default privacy setting, which makes
+the information available to all roster contacts.
+
+If your your XMPP server does not support `XEP-0223`'s ``#publish-options``
+feature and you don't mind that your room bookmarks are visible to all
+contacts, then you can set this setting to ``true``. Otherwise you won't be
+able to have any room bookmarks at all for an account on that XMPP server.
 
 allow_registration
 ------------------
@@ -186,12 +224,12 @@ animate
 
 * Default:  ``true``
 
-Show animations, for example when opening and closing chat boxes.
+Show animations, for example when opening and closing chatboxes.
 
 archived_messages_page_size
 ---------------------------
 
-* Default:  ``20``
+* Default:  ``50``
 
 See also: `message_archiving`_
 
@@ -199,10 +237,10 @@ This feature applies to `XEP-0313: Message Archive Management (MAM) <https://xmp
 and will only take effect if your server supports MAM.
 
 It allows you to specify the maximum amount of archived messages to be returned per query.
-When you open a chat box or room, archived messages will be displayed (if
+When you open a chatbox or room, archived messages will be displayed (if
 available) and the amount returned will be no more than the page size.
 
-You will be able to query for even older messages by scrolling upwards in the chat box or room
+You will be able to query for even older messages by scrolling upwards in the chatbox or room
 (the so-called infinite scrolling pattern).
 
 auto_list_rooms
@@ -213,11 +251,13 @@ auto_list_rooms
 If true, and the XMPP server on which the current user is logged in supports
 multi-user chat, then a list of rooms on that server will be fetched.
 
-Not recommended for servers with lots of chat rooms.
+Not recommended for servers with lots of chatrooms.
 
 For each room on the server a query is made to fetch further details (e.g.
 features, number of occupants etc.), so on servers with many rooms this
 option will create lots of extra connection traffic.
+
+.. _`auto_login`:
 
 auto_login
 ----------
@@ -230,13 +270,18 @@ soon as the page loads.
 It should be used either with ``authentication`` set to ``anonymous`` or to ``login``.
 
 If ``authentication`` is set to ``login``, then you will also need to provide a
-valid ``jid`` and ``password`` values.
+valid ``jid`` and ``password`` values, either manually by passing them in, or
+by the `credentials_url`_ setting. Setting a ``credentials_url`` is preferable
+to manually passing in ``jid`` and ``password`` values, because it allows
+better reconnection with ``auto_reconnect``. When the connection drops,
+converse.js will automatically fetch new login credentials from the
+``credentials_url`` and reconnect.
 
 If ``authentication`` is set to ``anonymous``, then you will also need to provide the
 server's domain via the `jid`_ setting.
 
 This is a useful setting if you'd like to create a custom login form in your
-website. You'll need to write some Javascript to accept that custom form's
+website. You'll need to write some JavaScript to accept that custom form's
 login credentials, then you can pass those credentials (``jid`` and
 ``password``) to ``converse.initialize`` to start converse.js and log the user
 into their XMPP account.
@@ -266,7 +311,7 @@ If the value is negative or ``0``, the function is disabled.
 auto_reconnect
 --------------
 
-* Default:  ``true``
+* Default:  ``false``
 
 Automatically reconnect to the XMPP server if the connection drops
 unexpectedly.
@@ -298,6 +343,19 @@ auto_join_on_invite
 If true, the user will automatically join a chatroom on invite without any confirm.
 
 
+auto_join_private_chats
+-----------------------
+
+* Default:  ``[]``
+
+Allows you to provide a list of user JIDs for private (i.e. single) chats that
+should automatically be started upon login.
+
+For example::
+
+    `['tom@example.org', 'dick@example.org', 'harry@example.org']`
+
+
 auto_join_rooms
 ---------------
 
@@ -310,9 +368,67 @@ You can either specify a simple list of room JIDs, in which case your nickname
 will be taken from your JID, or you can specify a list of maps, where each map
 specifies the room's JID and the nickname that should be used.
 
-For example:
+For example::
 
     `[{'jid': 'room@example.org', 'nick': 'WizardKing69' }]`
+
+
+blacklisted_plugins
+-------------------
+
+* Default: ``[]`` (``['converse-minimize', 'converse-dragresize']`` for inVerse)
+
+A list of plugin names that are blacklisted and will therefore not be
+initialized once ``converse.initialize`` is called, even if the same plugin is
+whitelisted.
+
+From Converse.js 3.0 onwards most of the API is available only to plugins and
+all plugins need to be whitelisted first.
+
+The usecase for blacklisting is generally to disable removed core plugins
+(which are automatically whitelisted) to prevent other (potentially malicious)
+plugins from registering themselves under those names.
+
+The core, and by default whitelisted, plugins are::
+
+    converse-bookmarks
+    converse-chatboxes
+    converse-chatview
+    converse-controlbox
+    converse-core
+    converse-disco
+    converse-dragresize
+    converse-fullscreen
+    converse-headline
+    converse-mam
+    converse-minimize
+    converse-muc
+    converse-muc-embedded
+    converse-notification
+    converse-otr
+    converse-ping
+    converse-profile
+    converse-register
+    converse-roomslist
+    converse-rosterview
+    converse-singleton
+    converse-spoilers
+    converse-vcard'
+
+Example:
+
+.. code-block:: javascript
+
+    require(['converse-core', 'converse-muc-embedded'], function (converse) {
+        converse.initialize({
+            // other settings removed for brevity
+            blacklisted_plugins: [
+                'converse-dragresize',
+                'converse-minimize'
+            ],
+        });
+    });
+
 
 .. _`bosh-service-url`:
 
@@ -391,7 +507,9 @@ accepts, refer to the
 
 As an example, suppose you want to restrict the supported SASL authentication
 mechanisms, then you'd pass in the ``mechanisms`` as a ``connection_options``
-``key:value`` pair::
+``key:value`` pair:
+
+.. code-block:: javascript
 
         converse.initialize({
             connection_options: {
@@ -400,6 +518,8 @@ mechanisms, then you'd pass in the ``mechanisms`` as a ``connection_options``
                 ]
             },
         });
+
+.. _`credentials_url`:
 
 credentials_url
 ---------------
@@ -412,6 +532,10 @@ This setting should be used in conjunction with ``authentication`` set to ``logi
 It allows you to specify a URL which converse.js will call when it needs to get
 the username and password (or authentication token) which converse.js will use
 to automatically log the user in.
+
+If ``auto_reconnect`` is also set to true, then converse.js will automatically
+fetch new credentials from the ``credentials_url`` whenever the connection or
+session drops, and then attempt to reconnect and establish a new session.
 
 The server behind ``credentials_url`` should return a JSON encoded object::
 
@@ -452,12 +576,20 @@ default_domain
 Specify a domain to act as the default for user JIDs. This allows users to log
 in with only the username part of their JID, instead of the full JID.
 
-For example, if ``default_domain`` is ``example.org``, then the user:
+For example, if ``default_domain`` is ``example.org``, then the user
 ``johnny@example.org`` can log in with only ``johnny``.
 
 JIDs with other domains are still allowed but need to be provided in full.
 To specify only one domain and disallow other domains, see the `locked_domain`_
 option.
+
+registration_domain
+-------------------
+
+* Default: ``''``
+
+Specify a domain name for which the registration form will be fetched automatically,
+without the user having to enter any XMPP server domain name.
 
 default_state
 -------------
@@ -474,6 +606,16 @@ domain_placeholder
 * Default: ``e.g. conversejs.org``
 
 The placeholder text shown in the domain input on the registration form.
+
+
+emojione_image_path
+-------------------
+
+* Default: ``'https://cdn.jsdelivr.net/emojione/assets/' + emojioneVersion + '/png/'``
+
+When `use_emojione`_ is set to ``true``, then this is the URL from where PNG image files for
+displaying emojis will be fetched.
+
 
 expose_rid_and_sid
 ------------------
@@ -522,6 +664,21 @@ logged in user, otherwise the user's vCard will be fetched.
 
 .. _`hide_muc_server`:
 
+geouri_regex
+----------------
+
+* Default:  ``/https:\/\/www.openstreetmap.org\/.*#map=[0-9]+\/([\-0-9.]+)\/([\-0-9.]+)\S*/g``
+
+Regular expression used to extract geo coordinates from links to openstreetmap.
+
+geouri_replacement
+----------------
+
+* Default:  ``'https://www.openstreetmap.org/?mlat=$1&mlon=$2#map=18/$1/$2'``
+
+String used to replace geo-URIs with. Ought to be a link to osm or similar. ``$1`` and ``$2`` is replaced by
+latitude and longitude respectively.
+
 hide_muc_server
 ---------------
 
@@ -537,6 +694,22 @@ hide_offline_users
 * Default:  ``false``
 
 If set to ``true``, then don't show offline users.
+
+hide_open_bookmarks
+-------------------
+
+* Default:  ``false`` (``true`` for inVerse).
+
+This setting applies to the ``converse-bookmarks`` plugin and specfically the
+list of bookmarks shown in the ``Rooms`` tab of the control box.
+
+By default all bookmarks are shown in that list, if this setting is set to
+``true``, then only bookmarks for rooms not currently open (i.e. that the
+current user hasn't joined), are shown.
+
+Makes sense to set this to ``true`` when also using the non-core
+``converse-roomslist`` plugin, which shows a list of currently open (i.e.
+"joined") rooms.
 
 include_offline_state
 ---------------------
@@ -562,7 +735,8 @@ state. The only defined states are:
 * dnd -- The entity or resource is busy (dnd = "Do Not Disturb").
 * xa -- The entity or resource is away for an extended period (xa = "eXtended Away").
 
-Read the [relevant section in the XMPP spec](https://xmpp.org/rfcs/rfc6121.html#presence-syntax-children-show) for more info.
+Read the `relevant section in the XMPP spec <https://xmpp.org/rfcs/rfc6121.html#presence-syntax-children-show>`_
+for more info.
 
 What used to happen in converse.js when the `offline` state was chosen, is
 that a presence stanza with a `type` of `unavailable` was sent out.
@@ -579,14 +753,23 @@ confusing and appears "broken".
 If you are however aware of this issue and still want to allow the `offline`
 state, then you can set this option to `true` to enable it.
 
+.. _`i18n`:
+
 i18n
 ----
 
-* Default:  Auto-detection of the User/Browser language
+* Default:  Auto-detection of the User/Browser language or ``en``;
 
-If no locale is matching available locales, the default is ``en``.
-Specify the locale/language. The language must be in the ``locales`` object. Refer to
-``./locale/locales.js`` to see which locales are supported.
+Specify the locale/language.
+
+The translations for that locale must be available in JSON format at the
+`locales_url`_
+
+If an explicit locale is specified via the ``i18n`` setting and the
+translations for that locale are not found at the `locales_url``, then 
+then Converse.js will fall back to trying to determine the browser's language
+and fetching those translations, or if that fails the default English texts
+will be used.
 
 jid
 ---
@@ -626,6 +809,61 @@ See also:
     `XEP-0198 <http://xmpp.org/extensions/xep-0198.html>`_, specifically
     with regards to "stream resumption".
 
+.. _`locales`:
+
+locales
+-------
+
+* Default:
+
+.. code-block:: javascript
+
+    locales: [
+        'af', 'ca', 'de',
+        'es', 'en', 'fr',
+        'he', 'hu', 'id',
+        'it', 'ja', 'nb',
+        'nl', 'pl', 'pt_BR',
+        'ru', 'uk', 'zh'
+    ]
+
+This setting restricts the locales that are supported by Converse.js and
+therefore what may be given as value for the :ref:`i18n` option.
+
+Any other locales will be ignored.
+
+When self-hosting, also make sure that the locales are served and therefore
+fetchable (via ``XMLHttpRequest``) at the URL specified by :ref:`locales-url`.
+
+.. _`locales-url`:
+
+locales_url
+-----------
+
+* Default: ``/locale/{{{locale}}}/LC_MESSAGES/converse.json``,
+
+The URL from where Converse.js should fetch translation JSON.
+
+The three curly braces ``{{{ }}}`` are
+`Mustache <https://github.com/janl/mustache.js#readme>`_-style
+variable interpolation which HTML-escapes the value being inserted. It's
+important that the inserted value is HTML-escaped, otherwise a malicious script
+injection attack could be attempted.
+
+The variable being interpolated via the curly braces is ``locale``, which is
+the value passed in to the `i18n`_ setting, or the browser's locale or the
+default local or `en` (resolved in that order).
+
+From version 3.3.0, Converse.js no longer bundles all translations into its
+final build file. Instead, only the relevant translations are fetched at
+runtime.
+
+This change also means that it's no longer possible to pass in the translation
+JSON data directly into ``_converse.initialize`` via the `i18n`_ setting.
+Instead, you only specify the language code (e.g. `de`) and that language's
+JSON translations will automatically be fetched via XMLHTTPRequest at
+``locales_url``.
+
 locked_domain
 -------------
 
@@ -633,16 +871,26 @@ locked_domain
 
 Similar to `default_domain`_ but no other domains are allowed.
 
+For example, if ``locked_domain`` is set to ``example.org``, then the user
+``johnny@example.org`` can log in with only ``johnny``.
+
+Additionally, only users registered on the ``example.org`` host can log in, no
+other users are allowed to log in.
+
 message_archiving
 -----------------
 
-* Default:  ``never``
+* Default:  ``undefined``
 
 Provides support for `XEP-0313: Message Archive Management <https://xmpp.org/extensions/xep-0313.html>`_,
-whereby messages are archived in the XMPP server for later retrieval. Note, your XMPP server must support
-XEP-0313 MAM for this to work.
+whereby messages are archived in the XMPP server for later retrieval.
+Note, your XMPP server must support XEP-0313 MAM for this to work.
 
-This option sets the default archiving preference. Valid values are ``never``, ``always`` and ``roster``.
+This option sets the default archiving preference.
+Valid values are ``undefined``, ``never``, ``always`` and ``roster``.
+
+``undefined`` means that any existing MAM configuration, as set by the user or
+the server administrator, will be used.
 
 ``roster`` means that only messages to and from JIDs in your roster will be
 archived. The other two values are self-explanatory.
@@ -701,6 +949,13 @@ See also the `storage`_ option, which applies to other cached data, such as
 which chats you have open, what features the XMPP server supports and what
 your online status is.
 
+muc_disable_moderator_commands
+------------------------------
+
+* Default: ``false``
+
+Allows you to disable the moderator commands such as ``/kick`` or ``/ban``.
+
 muc_domain
 ----------
 
@@ -718,15 +973,15 @@ muc_history_max_stanzas
 * Default:  ``undefined``
 
 This option allows you to specify the maximum amount of messages to be shown in a
-chat room when you enter it. By default, the amount specified in the room
+chatroom when you enter it. By default, the amount specified in the room
 configuration or determined by the server will be returned.
 
 Please note, this option is not related to
 `XEP-0313 Message Archive Management <https://xmpp.org/extensions/xep-0313.html>`_,
-which also allows you to show archived chat room messages, but follows a
+which also allows you to show archived chatroom messages, but follows a
 different approach.
 
-If you're using MAM for archiving chat room messages, you might want to set
+If you're using MAM for archiving chatroom messages, you might want to set
 this option to zero.
 
 muc_instant_rooms
@@ -748,14 +1003,31 @@ muc_nickname_from_jid
 * Default: ``false``
 
 When set to ``true``, then users will not be prompted to provide nicknames for
-chat rooms. Instead, the node part of a user's JID (i.e. JID = node@domain/resource)
+chatrooms. Instead, the node part of a user's JID (i.e. JID = node@domain/resource)
 will be used. If the user's nickname is already taken by another user in the
-chat room, then an integer will be added to make it unique.
+chatroom, then an integer will be added to make it unique.
 
 So, for example, if john@example.com joins a chatroom, his nickname will
 automatically be "john". If now john@differentdomain.com tries to join the
 room, his nickname will be "john-2", and if john@somethingelse.com joins, then
 his nickname will be "john-3", and so forth.
+
+muc_show_join_leave
+-------------------
+
+* Default; ``true``
+
+Determines whether Converse.js will show info messages inside a chatroom
+whenever a user joins or leaves it.
+
+nickname
+--------
+
+* Default: ``undefined``
+
+This setting allows you to specify the nickname for the current user.
+The nickname will be included in presence requests to other users and will also
+be used as the default nickname when entering MUC chatrooms.
 
 notify_all_room_messages
 ------------------------
@@ -797,7 +1069,7 @@ play_sounds
 * Default:  ``false``
 
 Plays a notification sound when you receive a personal message or when your
-nickname is mentioned in a chat room.
+nickname is mentioned in a chatroom.
 
 Inside the ``./sounds`` directory of the Converse.js repo you'll see MP3 and Ogg
 formatted sound files. We need both, because neither format is supported by all browsers.
@@ -832,6 +1104,26 @@ three tokens::
         "rid": "876987608760"
     }
 
+priority
+--------
+
+* Default:  ``0``
+* Type:     Number
+
+Determines the priority used for presence stanzas sent out from this resource
+(i.e. this instance of Converse.js).
+
+The priority of a given XMPP chat client determines the importance of its presence
+stanzas in relation to stanzas received from other clients of the same user.
+
+In Converse.js, the indicated chat status of a roster contact will be taken from the
+presence stanza (and associated resource) with the highest priority.
+
+If multiple resources have the same top priority, then the chat status will be
+taken from the most recent present stanza.
+
+For more info you can read `Section 2.2.2.3 of RFC-3921 <https://xmpp.org/rfcs/rfc3921.html#rfc.section.2.2.2.3>`_.
+
 providers_link
 --------------
 
@@ -839,6 +1131,35 @@ providers_link
 
 The hyperlink on the registration form which points to a directory of public
 XMPP servers.
+
+root
+----
+
+* Default: ``window.document``
+
+When using converse.js inside a web component's shadow DOM, you will need to set this settings'
+value to the shadow-root of the shadow DOM.
+
+For example:
+
+.. code-block:: javascript
+
+  class CustomChatComponent extends HTMLElement {
+    constructor() {
+      super();
+      const shadowRoot  = this.attachShadow({mode: "open"});
+      this.initConverse(shadowRoot);
+    }
+
+    initConverse(shadowRoot) {
+        window.addEventListener("converse-loaded", function(event) {
+            converse.initialize({
+                root: shadowRoot,
+                // Other settings go here...
+            });
+        });
+      }
+    }
 
 
 roster_groups
@@ -854,10 +1175,17 @@ configured.
     Converse.js can only show users and groups that were previously configured
     elsewhere.
 
+show_chatstate_notifications
+----------------------------
+
+* Default:  ``false``
+
+Specifies whether chat state (online, dnd, away) HTML5 desktop notifications should be shown.
+
 show_controlbox_by_default
 --------------------------
 
-* Default:  ``false``
+* Default:  ``false`` (``true`` for inVerse)
 
 The "controlbox" refers to the special chatbox containing your contacts roster,
 status widget, chatrooms and other controls.
@@ -889,6 +1217,16 @@ Notification will be shown in the following cases:
 
 Requires the `src/converse-notification.js` plugin.
 
+use_emojione
+------------
+* Default: ``true``
+
+Determines whether `Emojione <https://www.emojione.com/>`_ should be used to
+render emojis. If set to ``false``, then rendering support will fall back to
+the operating system or browser (which might not support emoji).
+
+See also `emojione_image_path`_.
+
 show_only_online_users
 ----------------------
 
@@ -896,6 +1234,13 @@ show_only_online_users
 
 If set to ``true``, only online users will be shown in the contacts roster.
 Users with any other status (e.g. away, busy etc.) will not be shown.
+
+show_send_button
+----------------------
+
+* Default:  ``false``
+
+If set to ``true``, a button will be visible which can be clicked to send a message.
 
 sounds_path
 -----------
@@ -948,12 +1293,12 @@ data.
     Since version 1.0.7, the "storage" option doesn't apply anymore to how roster
     contacts and their statuses are stored (they're now always stored in session
     storage), to address the above issue.
-    
+
 
 sticky_controlbox
 -----------------
 
-* Default: ``false``
+* Default: ``false`` (``true`` for inVerse).
 
 If set to ``true``, the control box (which includes the login, registration,
 contacts and rooms tabs) will not be closeable. It won't have a close button at
@@ -964,6 +1309,7 @@ devices when the intent is to use converse.js as a web app. In this case
 it doesn't make sense to close the control box, as there's often then nothing
 "behind" it that's relevant to the user.
 
+.. _`strict_plugin_dependencies`:
 
 strict_plugin_dependencies
 --------------------------
@@ -976,11 +1322,22 @@ loaded), then an error will be raised.
 
 Otherwise a message will simply be logged and the override instruction ignored.
 
-This allows plugins to have "soft" dependencies which aren't declared as
-as dependencies.
+The Converse.js plugins architecture can have an :ref:`dependencies`
+plugin attribute. This enables you to specify an array of other plugins which
+this one depends on.
+Converse.js (more specifically, `pluggable.js <https://jcbrand.github.io/pluggable.js/>`_)
+will first load these dependencies before executing the plugin's overrides and
+calling its ``initialize`` method.
+
+This is especially important if you register event handlers in your plugin for
+events that fire in other plugins. In this case, you want to specify those
+other plugins as dependencies.
+
+If ``strict_plugin_dependencies`` is set to ``false``, an error won't be raised
+if the optional dependencies aren't found.
 
 synchronize_availability
---------------------
+------------------------
 
 * Default: ``true``
 
@@ -995,13 +1352,24 @@ If set to ``false``, this feature is disabled.
 
 If set to ``a resource name``, converse.js will synchronize only with a client that has that particular resource assigned to it.
 
+time_format
+-----------
+
+* Default: ``HH:mm``
+
+Examples: ``HH:mm``, ``hh:mm``, ``hh:mm a``.
+
+This option makes the time format for the time shown, for each message, configurable. Converse uses `moment.js <https://momentjs.com/>`_
+for showing time. This option allows the configuration of the format in which `moment` will display the time for the messages. For detailed
+description of time-format options available for `moment` you can check this `link <https://momentjs.com/docs/#/parsing/string-format/>`_.
+
 use_otr_by_default
 ------------------
 
 * Default:  ``false``
 
 If set to ``true``, Converse.js will automatically try to initiate an OTR (off-the-record)
-encrypted chat session every time you open a chat box.
+encrypted chat session every time you open a chatbox.
 
 use_vcards
 ----------
@@ -1021,28 +1389,27 @@ visible_toolbar_buttons
 
     {
         call: false,
-        clear: true,
-        emoticons: true,
+        emoji: true,
         toggle_occupants: true
     }
 
-Allows you to show or hide buttons on the chat boxes' toolbars.
+Allows you to show or hide buttons on the chatboxes' toolbars.
 
 * *call*:
     Provides a button with a picture of a telephone on it.
-    When the call button is pressed, it will emit an event that can be used by a third-party library to initiate a call.::
+    When the call button is pressed, it will emit an event that can be used by a third-party library to initiate a call.
 
-        converse.listen.on('callButtonClicked', function(event, data) {
+    .. code-block:: javascript
+
+        converse.listen.on('callButtonClicked', function(data) {
             console.log('Strophe connection is', data.connection);
             console.log('Bare buddy JID is', data.model.get('jid'));
             // ... Third-party library code ...
         });
-* *clear*:
-    Provides a button for clearing messages from a chat box.
-* *emoticons*:
-    Enables rendering of emoticons and provides a toolbar button for choosing them.
-* toggle_occupants:
-    Shows a button for toggling (i.e. showing/hiding) the list of occupants in a chat room.
+* *emoji*:
+    Enables rendering of emoji and provides a toolbar button for choosing them.
+* *toggle_occupants*:
+    Shows a button for toggling (i.e. showing/hiding) the list of occupants in a chatroom.
 
 .. _`websocket-url`:
 
@@ -1071,64 +1438,159 @@ support.
 .. note::
     Converse.js does not yet support "keepalive" with websockets.
 
-xhr_custom_status
------------------
+.. _`view_mode`:
 
-* Default:  ``false``
+view_mode
+---------
+
+* Default: ``overlayed``
+* Allowed values: ``overlayed``, ``fullscreen``, ``mobile``, ``embedded``
+
+The ``view_mode`` setting configures converse.js's mode and resulting behavior.
+
+Before the introduction of this setting (in version 3.3.0), there were there
+different builds, each for the different modes.
+
+These were:
+
+* ``converse-mobile.js`` for the ``mobile`` mode
+* ``converse-muc-embedded.js`` for embedding a single MUC room into a DOM element with id ``conversejs``
+* ``converse.js`` for the ``overlayed`` mode
+* ``inverse.js`` for the ``fullscreen`` mode
+
+Besides having different builds, certain plugins had to be whitelisted
+and blacklisted for the different modes.
+
+``converse-singleton`` had to be whitelisted for the ``mobile`` and ``fullscreen``
+modes, additionally ``converse-inverse`` had to be whitelisted for the
+``fullscreen`` mode.
+
+For both those modes the ``converse-minimize`` and ``converse-dragresize``
+plugins had to be blacklisted.
+
+When using ``converse-muc-embedded.js`` various plugins also had to manually be
+blacklisted.
+
+Since version 3.3.0 it's no longer necessary to blacklist any plugins (except
+for ``converse-muc-embedded.js``, which is from version 3.3.3).
+
+Blacklisting now happens automatically.
+
+Since version 3.3.0, the ``inverse.js`` and ``converse-mobile.js`` builds no
+longer exist. Instead the standard ``converse.js`` build is used, together with
+the appropriate ``view_mode`` value.
+
+The ``converse-muc-embedded.js`` build is still kept, because it's smaller than
+``converse.js`` due to unused code being removed. It doesn't however contain
+any new code, so the full ``converse.js`` build could be used instead, as long
+as ``view_mode`` is set to ``embedded``.
+
+Furthermore, it's no longer necessary to whitelist or blacklist any plugins
+when switching view modes.
 
 .. note::
-    XHR stands for XMLHTTPRequest, and is meant here in the AJAX sense (Asynchronous Javascript and XML).
+    Although the ``view_mode`` setting has removed the need for different
+    JavaScript builds, you'll still need to use different CSS files depending
+    on the view mode.
 
-This option will let converse.js make an AJAX POST with your changed custom chat status to a
-remote server.
+    * For ``embedded`` you need to use ``./css/converse-muc-embedded.css``
+    * For ``fullscreen`` you need ``./css/inverse.css``
+    * For ``mobile`` you need to use both ``./css/converse.css`` and ``./css/mobile.css``
+    * For ``overlayed`` this is ``./css/converse.css``
 
-xhr_custom_status_url
----------------------
+    Hopefully in a future release the CSS files will be combined and you'll
+    only need ``converse.css``
+
+
+.. _`whitelisted_plugins`:
+
+whitelisted_plugins
+-------------------
+
+* Default: ``[]``
+
+A list of plugin names that are whitelisted and will therefore be
+initialized once ``converse.initialize`` is called.
+
+From Converse.js 3.0 onwards most of the API is available only to plugins and
+all plugins need to be whitelisted first.
+
+This is done to prevent malicious scripts from using the API to trick users or
+to read their conversations.
+
+By default all the core plugins are already whitelisted.
+
+These are::
+
+    converse-bookmarks
+    converse-chatboxes
+    converse-chatview
+    converse-controlbox
+    converse-core
+    converse-disco
+    converse-dragresize
+    converse-fullscreen
+    converse-headline
+    converse-mam
+    converse-minimize
+    converse-muc
+    converse-muc-embedded
+    converse-notification
+    converse-otr
+    converse-ping
+    converse-profile
+    converse-register
+    converse-roomslist
+    converse-rosterview
+    converse-singleton
+    converse-spoilers
+    converse-vcard'
 
 .. note::
-    XHR stands for XMLHTTPRequest, and is meant here in the AJAX sense (Asynchronous Javascript and XML).
+    If you are using a custom build which excludes some core plugins, then you
+    should blacklist them so that malicious scripts can't register their own
+    plugins under those names. See `blacklisted_plugins`_ for more info.
 
-* Default:  Empty string
+Example:
 
-Used only in conjunction with ``xhr_custom_status``.
+.. code-block:: javascript
 
-This is the URL to which the AJAX POST request to set the user's custom status
-message will be made.
+    require(['converse-core', 'converse-muc-embedded'], function (converse) {
+        converse.initialize({
+            // other settings removed for brevity
+            whitelisted_plugins: ['myplugin']
+        });
+    });
 
-The message itself is sent in the request under the key ``msg``.
-
-xhr_user_search
----------------
-
-* Default:  ``false``
-
-.. note::
-    XHR stands for XMLHTTPRequest, and is meant here in the AJAX sense (Asynchronous Javascript and XML).
-
-There are two ways to add users.
-
-* The user inputs a valid JID (Jabber ID), and the user is added as a pending contact.
-* The user inputs some text (for example part of a firstname or lastname), an XHR (Ajax Request) will be made to a remote server, and a list of matches are returned. The user can then choose one of the matches to add as a contact.
-
-This setting enables the second mechanism, otherwise by default the first will be used.
-
-*What is expected from the remote server?*
-
-A default JSON encoded list of objects must be returned. Each object
-corresponds to a matched user and needs the keys ``id`` and ``fullname``.
-
-.. note::
-    Make sure your server script sets the header `Content-Type: application/json`.
 
 xhr_user_search_url
 -------------------
 
 .. note::
-    XHR stands for XMLHTTPRequest, and is meant here in the AJAX sense (Asynchronous Javascript and XML).
+    XHR stands for XMLHTTPRequest, and is meant here in the AJAX sense (Asynchronous JavaScript and XML).
 
-* Default:  Empty string
+* Default: ``null``
 
-Used only in conjunction with ``xhr_user_search``.
+There are two ways to add users.
+
+* The user inputs a valid JID (Jabber ID, aka XMPP address), and the user is added as a pending contact.
+* The user inputs some text (for example part of a first name or last name),
+  an XHR (Ajax Request) will be made to a remote server, and a list of matches are returned.
+  The user can then choose one of the matches to add as a contact.
+
+By providing an XHR search URL, you're enabling the second mechanism.
+
+*What is expected from the remote server?*
+
+A default JSON encoded list of objects must be returned. Each object
+corresponds to a matched user and needs the keys ``jid`` and ``fullname``.
+
+.. code-block:: javascript
+
+    [{"jid": "marty@mcfly.net", "fullname": "Marty McFly"}, {"jid": "doc@brown.com", "fullname": "Doc Brown"}]
+
+.. note::
+    Make sure your server script sets the header `Content-Type: application/json`.
 
 This is the URL to which an XHR GET request will be made to fetch user data from your remote server.
 The query string will be included in the request with ``q`` as its key.

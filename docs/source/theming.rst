@@ -2,13 +2,11 @@
 
     <div id="banner"><a href="https://github.com/jcbrand/converse.js/blob/master/docs/source/theming.rst">Edit me on GitHub</a></div>
 
+.. _theming:
+
 =======
 Theming
 =======
-
-.. contents:: Table of Contents
-   :depth: 2
-   :local:
 
 Setting up your environment
 ===========================
@@ -69,7 +67,7 @@ Creating dist files
 ===================
 
 Once you've themed converse.js, you'll want to create new minified distribution
-files of all the Javascript and CSS.
+files of all the JavaScript and CSS.
 
 Please refer to the :doc:`builds` section for information on how this is done.
 

@@ -1,15 +1,16 @@
 #conversejs {
     .flyout {
         border-radius: $chatbox-border-radius;
-        @media screen and (max-height: $mobile-landscape-height) {
-            border-radius: 0;
-        }
-        @media screen and (max-width: $mobile-portrait-length) {
-            border-radius: 0;
-        }
         bottom: $chatbox-hover-height;
-        display: block;
         position: absolute;
+
+        @media screen and (max-height: $mobile-landscape-height) {
+            border-radius: 0;
+        }
+        @media screen and (max-width: $mobile-portrait-length) {
+            border-radius: 0;
+        }
+
         @media screen and (max-height: $mobile-landscape-height) {
             bottom: 0;
         }
@@ -17,71 +18,91 @@
             bottom: 0;
         }
     }
-    .chat-head {
-        border-top-left-radius: $chatbox-border-radius;
-        border-top-right-radius: $chatbox-border-radius;
-        @media screen and (max-height: $mobile-landscape-height) {
-            border-top-left-radius: 0;
-            border-top-right-radius: 0;
-        }
-        @media screen and (max-width: $mobile-portrait-length) {
-            border-top-left-radius: 0;
-            border-top-right-radius: 0;
-        }
-        color: #ffffff;
-        font-size: 100%;
-        height: $chat-head-height;
-        margin: 0;
-        padding: 5px;
-        position: relative;
-        .avatar {
-            margin-right: 0.5em;
-            border-radius: 50%;
-            float: left;
-        }
-        &.chat-head-chatbox {
-            background-color: $chat-head-color;
-        }
-        .user-custom-message {
-            color: white;
-            font-size: 80%;
-            font-style: italic;
-            height: 1.3em;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            margin: 0;
-            padding-top: 0.5em;
-        }
-    }
+
     .chatbox-btn {
-        border-radius: 50%;
-        border: 1px solid white;
-        color: white;
+        border-radius: 25%;
+        border: none;
         cursor: pointer;
-        display: inline-block;
-        float: right;
         font-size: $box-close-font-size;
-        margin: 0;
-        margin-left: 0.1em;
-        margin-right: 0.2em;
-        padding: 0.5em 0.5em 0.3em 0.5em;
+        margin: 0 0.2em;
+        padding: 0 0 0 0.5em;
         text-decoration: none;
+
         &:active {
             position: relative;
             top: 1px;
         }
-        &.button-on {
-            background-color: white;
-            color: $chat-head-color;
+    }
+
+    .chat-head {
+        flex-wrap: nowrap;
+        color: #ffffff;
+        font-size: 100%;
+        height: $chat-head-height;
+        margin: 0;
+        padding: 0.5em;
+        position: relative;
+
+        &.chat-head-chatbox {
+            background-color: $chat-head-color;
+        }
+
+        .avatar {
+            margin-right: 0.5em;
+        }
+
+        .chatbox-buttons {
+            flex-direction: row-reverse;
+            @include make-col-ready();
+            @include make-col(3);
+            padding: 0;
+        }
+
+        .user-custom-message {
+            color: white;
+            font-size: 75%;
+            font-style: italic;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin: 0;
+            padding-top: 0.2em;
+        }
+
+        a, a:visited, a:hover, a:not([href]):not([tabindex]) {
+            &.chatbox-btn {
+                &.fa {
+                    color: white;
+                    &.button-on:before {
+                        padding: 0.2em;
+                        background-color: $chat-head-text-color;
+                        color: $chat-head-color;
+                    }
+                }
+            }
+        }
+
+        .chatbox-btn {
+            color: white;
+            &.fa  {
+                color: white;
+            }
+            &:active {
+                position: relative;
+                top: 1px;
+            }
+            &.button-on:before {
+                border-radius: 5%;
+                background-color: $chat-head-text-color;
+                color: $chat-head-color;
+            }
         }
     }
+
     .chatbox {
-        display: block;
-        float: right;
-        height: $bottom-gutter-height;
+        text-align: left;
         margin: 0 $chat-gutter;
-        width: $chat-width;
+
         @media screen and (max-height: $mobile-landscape-height) {
             margin: 0;
             width: $mobile-chat-width;
@@ -90,14 +111,19 @@
             margin: 0;
             width: $mobile-chat-width;
         }
+
         .box-flyout {
-            background-color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background-color: $chat-head-color;
             box-shadow: 1px 3px 5px 3px rgba(0, 0, 0, 0.4);
             height: $chat-height;
             min-height: $chat-height/2;
-            min-width: $chat-width;
-            width: $chat-width;
             z-index: 1;
+            overflow-y: scroll;
+            width: 100%;
+
             @media screen and (max-height: $mobile-landscape-height) {
                 height: $mobile-chat-height;
                 width: $mobile-chat-width;
@@ -110,20 +136,26 @@
             }
         }
         .chat-title {
-            color: $chat-head-text-color;
-            line-height: 15px;
+            color: white;
             display: block;
-            text-overflow: ellipsis;
+            line-height: $line-height-large;
             overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
             a {
                 color: $chat-head-text-color;
                 width: 100%;
             }
         }
         .chat-body {
-            background-color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 100%;
+            background-color: $chat-head-color;
             border-bottom-left-radius: $chatbox-border-radius;
             border-bottom-right-radius: $chatbox-border-radius;
+
             @media screen and (max-height: $mobile-landscape-height) {
                 border-bottom-left-radius: 0;
                 border-bottom-right-radius: 0;
@@ -133,89 +165,45 @@
                 border-bottom-right-radius: 0;
             }
             border-top: 0;
-            height: 289px;
-            @include calc(height, '100% - #{$chat-head-height}');
             p {
                 color: $text-color;
-                font-size: $font-size;
+                font-size: $message-font-size;
                 margin: 0;
                 padding: 5px;
             }
-            .chat-info {
-                color: $warning-color;
-                margin: 0.3em;
-                &.chat-event {
-                    clear: left;
-                    font-style: italic;
-                }
-                &.chat-error {
-                    color: $warning-color;
-                    font-weight: bold;
-                }
-                &.chat-date {
-                    display: inline-block;
-                    margin-top: 1em;
-                }
-            }
-            .chat-image {
-                max-width: 100%;
-                max-height: 100%;
-            }
-            .chat-message {
-                margin: 0.3em;
-                span {
-                    display: inline-block;
-                    &.chat-msg-author {
-                        max-width: 100%;
-                        font-weight: bold;
-                        white-space: nowrap;
-                        float: left;
-                        text-overflow: ellipsis;
-                        overflow: hidden;
-                    }
-                    &.chat-msg-them {
-                        color: $message-them-color;
-                    }
-                    &.chat-msg-me {
-                        color: $link-color;
-                    }
-                    &.chat-msg-content {
-                        max-width: 100%;
-                        word-wrap: break-word;
-                    }
-                }
-            }
-            .delayed {
-                .chat-msg-them {
-                    color: #FB5D50;
-                }
-                .chat-msg-me {
-                    color: #7EABBB;
-                }
-            }
         }
         .new-msgs-indicator {
-            position: absolute;
+            position: relative;
             width: 100%;
             cursor: pointer;
             background-color: $chat-head-color;
             color: $light-background-color;
-            padding: 0.3em;
+            padding: 0.5em;
             font-size: 0.9em;
             text-align: center;
             z-index: 20;
+            white-space: nowrap;
+            margin-bottom: 0.25em;
         }
         .chat-content {
-            position: relative;
-            padding: 0.5em;
-            font-size: 13px;
+            height: 100%;
+            font-size: $message-font-size;
             color: $text-color;
             overflow-y: auto;
             border: 0;
             background-color: #ffffff;
             line-height: 1.3em;
-            height: 206px;
-            height: calc(100% - #{$toolbar-height + $chat-textarea-height +1px});
+
+            video {
+                width: 100%
+            }
+            progress {
+                margin: 0.5em 0;
+                width: 100%
+            }
+        }
+        .chat-content-sendbutton {
+            height: calc(100% - #{$chat-textarea-height + $send-button-height + 2*$send-button-margin});
         }
 
         .dropdown { /* status dropdown styles */
@@ -226,51 +214,73 @@
                 position: relative;
             }
         }
-        form.sendXMPPMessage {
+
+        .sendXMPPMessage {
             -moz-background-clip: padding;
             -webkit-background-clip: padding-box;
             @include border-bottom-radius($chatbox-border-radius);
             background-clip: padding-box;
-            background: white;
-            border-top: 1px solid #BBB;
+            background-color: white;
             border: 0;
             margin: 0;
             padding: 0;
-            position: relative;
-            height: #{$chat-textarea-height + $toolbar-height};
-            min-width: $chat-width;
             @media screen and (max-height: $mobile-landscape-height) {
                 width: 100%;
             }
             @media screen and (max-width: $mobile-portrait-length) {
                 width: 100%;
             }
+
+            .spoiler-hint {
+                width: 100%;
+            }
+
             .chat-textarea {
+                border-top-left-radius: 0;
+                border-top-right-radius: 0;
                 @include border-bottom-radius($chatbox-border-radius);
-                border: 0;
-                height: $chat-textarea-height;
                 padding: 0.5em;
                 width: 100%;
-                resize: none;
+                border: none;
+                min-height: $chat-textarea-height;
+                max-height: $max-chat-textarea-height;
+                margin-bottom: -4px; // Not clear why this is necessar :(
+                &.spoiler {
+                    height: 42px;
+                }
+            }
+
+            .send-button {
+                position: absolute;
+                left: $send-button-margin;
+                @include calc(width, '100% - #{2*$send-button-margin}');
+                background-color: $chat-head-color;
+                color: $inverse-link-color;
+                font-size: 80%;
+                height: $send-button-height;
+                bottom: -$send-button-height - $send-button-margin;
+
             }
             .chat-toolbar {
-                font-size: $font-size;
+                box-sizing: border-box;
                 margin: 0;
-                padding: 5px;
-                height: $toolbar-height;
+                padding: 0.25em;
                 display: block;
-                background-color: $toolbar-color;
-                a {
-                    color: $link-color;
-                }
-                .chat-toolbar-text {
-                    font-size: 12px;
-                    padding-right: 3px;
-                    text-shadow: 0 1px 0 white
+                border-top: 8px solid $chat-head-color;
+                background-color: white;
+                color: $chat-head-color;
+                .fa, .fa:hover {
+                    color: $chat-head-color;
+                    font-size: $font-size-large;
                 }
                 .unencrypted a,
                 .unencrypted {
-                    color: $warning-color;
+                    color: $text-color;
+                    .toolbar-menu {
+                        a {
+                            color: $link-color;
+                        }
+                    }
                 }
                 .unverified a,
                 .unverified {
@@ -280,71 +290,113 @@
                 .private {
                     color: #4b7003;
                 }
-                .toggle-occupants,
-                .toggle-clear,
-                .toggle-otr {
+                .toggle-occupants {
                     float: right;
                 }
                 li {
+                    cursor: pointer;
                     display: inline-block;
                     list-style: none;
-                    padding: 0 3px 0 3px;
-                    cursor: pointer;
-                    margin-top: 1px;
-                }
-                li:hover {
-                    cursor: pointer;
-                }
-                ul {
-                    background: #fff;
-                    bottom: 100%;
-                    box-shadow: -1px -1px 2px 0 rgba(0, 0, 0, 0.4);
-                    display: none;
-                    font-size: 12px;
-                    margin: 0;
-                    position: absolute;
-                    right: 0;
-                    li {
+                    padding: 0 0.5em;
+                    &:hover {
                         cursor: pointer;
-                        list-style: none;
-                        position: relative;
-                        a:hover {
-                            color: #8f2831;
-                        }
                     }
-                }
-                .toggle-smiley {
-                    color: $link-color;
-                    padding-left: 5px;
-                    ul {
-                        li {
-                            font-size: $font-size;
-                            padding: 5px;
-                            z-index: 98;
-                        }
-                        li:hover {
-                            background-color: $highlight-color;
-                        }
-                    }
-                }
-                .toggle-otr {
-                    ul {
-                        li {
-                            padding: 7px;
-                            background-color: white;
-                            display: block;
-                            z-index: 99;
-                            a {
-                                -moz-transition: background-color 0.2s ease-in-out;
-                                -webkit-transition: background-color 0.2s ease-in-out;
-                                transition: background-color 0.2s ease-in-out;
-                                display: block;
-                                padding: 1px;
-                                text-decoration: none;
+                    .toolbar-menu {
+                        background-color: #fff;
+                        bottom: 2rem;
+                        box-shadow: -1px -1px 2px 0 rgba(0, 0, 0, 0.4);
+                        margin-bottom: 0;
+                        min-width: 20rem;
+                        position: absolute;
+                        right: 0;
+                        top: auto;
+                        z-index: $zindex-dropdown;
+
+                        &.otr-menu {
+                            left: -6em;
+                            min-width: 15rem;
+
+                            &.show {
+                                display: flex;
+                                flex-direction: column;
                             }
                         }
-                        li:hover {
-                            background-color: $highlight-color;
+
+                        a {
+                            color: $link-color;
+                        }
+                        ul {
+                            &.emoji-picker {
+                                height: $emoji-picker-height;
+                                overflow: scroll;
+                                padding: 0.5em;
+                            }
+                            li {
+                                margin-left: 0;
+                                cursor: pointer;
+                                list-style: none;
+                                position: relative;
+                                &.emoji-skintone {
+                                }
+                                &.insert-emoji {
+                                    padding: 0.2em;
+                                    &.picked {
+                                        background-color: $highlight-color;
+                                    }
+                                    &:hover {
+                                        background-color: $highlight-color;
+                                    }
+                                    a {
+                                        font-size: $font-size-huge;
+                                        &:hover {
+                                            color: #8f2831;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    &.toggle-smiley {
+                        a.toggle-smiley {
+                            padding: 0;
+                        }
+                        .emoji-toolbar {
+                            box-shadow: 0 -1px 1px 0 rgba(0, 0, 0, 0.4);
+
+                            .emoji-category-picker {
+                                padding-top: 0.5em;
+                                ul {
+                                    display: flex;
+                                    flex-direction: row;
+                                    justify-content: space-between;
+                                }
+                            }
+
+                            .emoji-category-picker,
+                            .emoji-skintone-picker {
+                                li {
+                                    padding: 0.2em;
+                                    font-size: $font-size-huge;
+                                    &:hover {
+                                        background-color: $highlight-color;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    &.toggle-otr {
+                        ul {
+                            z-index: 99;
+                            li {
+                                &:hover {
+                                    background-color: $highlight-color;
+                                }
+                                display: block;
+                                padding: 7px;
+                                a {
+                                    display: block;
+                                }
+                            }
                         }
                     }
                 }
@@ -379,3 +431,32 @@
     }
 }
 
+@media screen and (max-width: 767px) {
+    #conversejs:not(.converse-embedded)  {
+        > .row {
+            flex-direction: row-reverse;
+        }
+
+        #converse-login-panel {
+            .converse-form {
+                padding: 3em 2em 3em;
+            }
+        }
+
+        .sidebar {
+            display: block;
+        }
+
+        .chatbox {
+            width: calc(100% - 50px);
+            .row {
+                .box-flyout {
+                    left: 50px;
+                    bottom: 0;
+                    height: 100vh;
+                    box-shadow: none;
+                }
+            }
+        }
+    }
+}

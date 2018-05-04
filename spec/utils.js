@@ -1,8 +1,8 @@
 (function (root, factory) {
-    define(["converse-api"], factory);
-} (this, function (converse_api) {
-    var utils = converse_api.env.utils,
-        _ = converse_api.env._;
+    define(["jasmine", "converse-core"], factory);
+} (this, function (jasmine, converse) {
+    var utils = converse.env.utils,
+        _ = converse.env._;
 
     return describe("Converse.js Utilities", function() {
 
@@ -12,8 +12,9 @@
                 show_toolbar: true,
                 chatview_avatar_width: 32,
                 chatview_avatar_height: 32,
+                auto_join_rooms: [],
                 visible_toolbar_buttons: {
-                    'emoticons': true,
+                    'emojis': true,
                     'call': false,
                     'clear': true,
                     'toggle_occupants': true
@@ -26,8 +27,11 @@
                 show_toolbar: false,
                 chatview_avatar_width: 32,
                 chatview_avatar_height: 48,
+                auto_join_rooms: [
+                    'anonymous@conference.nomnom.im',
+                ],
                 visible_toolbar_buttons: {
-                    'emoticons': false,
+                    'emojis': false,
                     'call': false,
                     'toggle_occupants':false,
                     'invalid': false 
@@ -39,11 +43,13 @@
             expect(context.show_toolbar).toBeFalsy();
             expect(context.chatview_avatar_width).toBe(32);
             expect(context.chatview_avatar_height).toBe(48);
-            expect(Object.keys(context.visible_toolbar_buttons)).toEqual(Object.keys(settings.visible_toolbar_buttons));
-            expect(context.visible_toolbar_buttons.emoticons).toBeFalsy();
+            expect(_.keys(context.visible_toolbar_buttons)).toEqual(_.keys(settings.visible_toolbar_buttons));
+            expect(context.visible_toolbar_buttons.emojis).toBeFalsy();
             expect(context.visible_toolbar_buttons.call).toBeFalsy();
             expect(context.visible_toolbar_buttons.toggle_occupants).toBeFalsy();
             expect(context.visible_toolbar_buttons.invalid).toBeFalsy();
+            expect(context.auto_join_rooms.length).toBe(1);
+            expect(context.auto_join_rooms[0]).toBe('anonymous@conference.nomnom.im');
 
             user_settings = {
                 visible_toolbar_buttons: {
@@ -51,7 +57,7 @@
                 }
             };
             utils.applyUserSettings(context, settings, user_settings);
-            expect(Object.keys(context.visible_toolbar_buttons)).toEqual(Object.keys(settings.visible_toolbar_buttons));
+            expect(_.keys(context.visible_toolbar_buttons)).toEqual(_.keys(settings.visible_toolbar_buttons));
             expect(context.visible_toolbar_buttons.toggle_occupants).toBeTruthy();
         });
     });

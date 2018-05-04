@@ -1,16 +1,17 @@
-/*global converse */
 (function (root, factory) {
     define([
         "jquery",
-        "underscore",
+        "jasmine",
+        "converse-core",
         "mock",
-        "test_utils",
+        "test-utils",
         "utils",
         "transcripts"
         ], factory
     );
-} (this, function ($, _, mock, test_utils, utils, transcripts) {
-    var Strophe = converse_api.env.Strophe;
+} (this, function ($, jasmine, converse, mock, test_utils, utils, transcripts) {
+    var Strophe = converse.env.Strophe;
+    var _ = converse.env._;
     var IGNORED_TAGS = [
         'stream:features',
         'auth',
@@ -47,30 +48,34 @@
     }
 
     return describe("Transcripts of chat logs", function () {
-        beforeEach(function () {
-            test_utils.openChatRoom("discuss", 'conference.conversejs.org', 'jc');
-            test_utils.openChatRoom("dummy", 'rooms.localhost', 'jc');
-            test_utils.openChatRoom("prosody", 'conference.prosody.im', 'jc');
-        });
 
-        it("can be used to replay conversations", function () {
-            spyOn(converse, 'areDesktopNotificationsEnabled').andReturn(true);
-            _.each(transcripts, function (transcript) {
-                var text = transcript();
-                var xml = Strophe.xmlHtmlNode(text);
-                $(xml).children('log').children('body').each(function (i, el) {
-                    $(el).children().each(function (i, el) {
-                        if (el.nodeType === 3) {
-                            return;  // Ignore text
-                        }
-                        if (_.contains(IGNORED_TAGS, el.nodeName.toLowerCase())) {
-                            return;
-                        }
-                        var _stanza = traverseElement(el);
-                        converse.connection._dataRecv(test_utils.createRequest(_stanza));
+        it("can be used to replay conversations",
+                mock.initConverseWithPromises(
+                    null, ['rosterGroupsFetched'], {},
+                    function (done, _converse) {
+
+            _converse.allow_non_roster_messaging = true;
+
+            test_utils.openAndEnterChatRoom(_converse, 'discuss', 'conference.conversejs.org', 'dummy').then(function () {
+                spyOn(_converse, 'areDesktopNotificationsEnabled').and.returnValue(true);
+                _.each(transcripts, function (transcript) {
+                    var text = transcript();
+                    var xml = Strophe.xmlHtmlNode(text);
+                    _.each(xml.firstElementChild.children, function (el) {
+                        _.each(el.children, function (el) {
+                            if (el.nodeType === 3) {
+                                return;  // Ignore text
+                            }
+                            if (_.includes(IGNORED_TAGS, el.nodeName.toLowerCase())) {
+                                return;
+                            }
+                            var _stanza = traverseElement(el);
+                            _converse.connection._dataRecv(test_utils.createRequest(_stanza));
+                        });
                     });
                 });
+                done();
             });
-        });
+        }));
     });
 }));

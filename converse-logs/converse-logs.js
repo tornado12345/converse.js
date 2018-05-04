@@ -1,5 +1,5 @@
 define("transcripts", [
-    "tpl!converse-logs/conversejs.containers-1460718487729",
+    "tpl!../../converse-logs/missing_messages",
 ], function () {
     return arguments;
 });
