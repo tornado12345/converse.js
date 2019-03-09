@@ -1,35 +1,32 @@
 # You can set these variables from the command line.
-UGLIFYJS		?= node_modules/.bin/uglifyjs
 BABEL			?= node_modules/.bin/babel
-BOURBON 		= ./node_modules/bourbon/app/assets/stylesheets/ 
-BOOTSTRAP		= ./node_modules/ 
+BOOTSTRAP		= ./node_modules/
+BOURBON 		= ./node_modules/bourbon/app/assets/stylesheets/
 BUILDDIR		= ./docs
-BUNDLE		  	?= ./.bundle/bin/bundle
 CHROMIUM		?= ./node_modules/.bin/run-headless-chromium
 CLEANCSS		?= ./node_modules/clean-css-cli/bin/cleancss --skip-rebase
 ESLINT		  	?= ./node_modules/.bin/eslint
 HTTPSERVE	   	?= ./node_modules/.bin/http-server
-HTTPSERVE_PORT  ?= 8000
-INKSCAPE        ?= inkscape
+HTTPSERVE_PORT	?= 8000
+INKSCAPE		?= inkscape
+INSTALL		?= install
+JSDOC			?=  ./node_modules/.bin/jsdoc
+LERNA			?= ./node_modules/.bin/lerna
+OXIPNG			?= oxipng
 PAPER		   	=
 PO2JSON		 	?= ./node_modules/.bin/po2json
-RJS			 	?= ./node_modules/.bin/r.js
-SASS			?= ./.bundle/bin/sass
-SPHINXBUILD	 	?= ./bin/sphinx-build
+RJS				?= ./node_modules/.bin/r.js
+NPX				?= ./node_modules/.bin/npx
+SASS			?= ./node_modules/.bin/node-sass
 SED				?= sed
+SPHINXBUILD	 	?= ./bin/sphinx-build
 SPHINXOPTS	  	=
-OXIPNG          ?= oxipng
+UGLIFYJS		?= node_modules/.bin/uglifyjs
 
-
-# In the case user wishes to use RVM 
-USE_RVM                 ?= false
-RVM_RUBY_VERSION        ?= 2.4.2
-ifeq ($(USE_RVM),true)
-	RVM_USE                 = rvm use $(RVM_RUBY_VERSION)
-endif
 
 # Internal variables.
 ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) ./docs/source
+VERSION_FORMAT	= [0-9]+\.[0-9]+\.[0-9]+
 
 .PHONY: all
 all: dev dist
@@ -38,28 +35,29 @@ all: dev dist
 help:
 	@echo "Please use \`make <target>' where <target> is one of the following:"
 	@echo ""
-	@echo " all           A synonym for 'make dev'."
-	@echo " build         Create minified builds of converse.js and all its dependencies."
-	@echo " clean         Remove all NPM and Ruby packages."
-	@echo " css           Generate CSS from the Sass files."
-	@echo " dev           Set up the development environment. To force a fresh start, run 'make clean' first."
-	@echo " html          Make standalone HTML files of the documentation."
-	@echo " po            Generate gettext PO files for each i18n language."
-	@echo " po2json       Generate JSON files from the language PO files."
-	@echo " pot           Generate a gettext POT file to be used for translations."
-	@echo " release       Prepare a new release of converse.js. E.g. make release VERSION=0.9.5"
-	@echo " serve         Serve this directory via a webserver on port 8000."
-	@echo " stamp-npm     Install NPM dependencies"
-	@echo " stamp-bundler Install Bundler (Ruby) dependencies"
-	@echo " watch         Tells Sass to watch the .scss files for changes and then automatically update the CSS files."
-	@echo " logo          Generate PNG logos of multiple sizes."
+	@echo " all             A synonym for 'make dev'."
+	@echo " build           Create minified builds of converse.js and all its dependencies."
+	@echo " clean           Remove all NPM packages."
+	@echo " check           Run all tests."
+	@echo " css             Generate CSS from the Sass files."
+	@echo " dev             Set up the development environment. To force a fresh start, run 'make clean' first."
+	@echo " html            Make standalone HTML files of the documentation."
+	@echo " po              Generate gettext PO files for each i18n language."
+	@echo " po2json         Generate JSON files from the language PO files."
+	@echo " pot             Generate a gettext POT file to be used for translations."
+	@echo " release         Prepare a new release of converse.js. E.g. make release VERSION=0.9.5"
+	@echo " serve           Serve this directory via a webserver on port 8000."
+	@echo " serve_bg        Same as \"serve\", but do it in the background"
+	@echo " stamp-npm       Install NPM dependencies"
+	@echo " watch           Watch for changes on JS and scss files and automatically update the generated files."
+	@echo " logo            Generate PNG logos of multiple sizes."
 
 
 ########################################################################
 ## Miscellaneous
 
 .PHONY: serve
-serve: dev 
+serve: dev
 	$(HTTPSERVE) -p $(HTTPSERVE_PORT) -c-1
 
 .PHONY: serve_bg
@@ -69,10 +67,10 @@ serve_bg: dev
 ########################################################################
 ## Translation machinery
 
-GETTEXT = xgettext --language="JavaScript" --keyword=__ --keyword=___ --from-code=UTF-8 --output=locale/converse.pot dist/converse-no-dependencies.js --package-name=Converse.js --copyright-holder="Jan-Carel Brand" --package-version=3.3.4 -c
+GETTEXT = xgettext --language="JavaScript" --keyword=__ --keyword=___ --from-code=UTF-8 --output=locale/converse.pot dist/converse-no-dependencies.js --package-name=Converse.js --copyright-holder="Jan-Carel Brand" --package-version=4.1.2 -c
 
 .PHONY: pot
-pot: dist/converse-no-dependencies.js
+pot: dist/converse-no-dependencies-es2015.js
 	$(GETTEXT) 2>&1 > /dev/null; exit $$?;
 
 .PHONY: po
@@ -88,90 +86,104 @@ po2json:
 
 .PHONY: release
 release:
-	$(SED) -ri s/Version:\ [0-9]\+\.[0-9]\+\.[0-9]\+/Version:\ $(VERSION)/ COPYRIGHT
-	$(SED) -ri s/Version:\ [0-9]\+\.[0-9]\+\.[0-9]\+/Version:\ $(VERSION)/ src/start.frag
-	$(SED) -ri s/Project-Id-Version:\ Converse\.js\ [0-9]\+\.[0-9]\+\.[0-9]\+/Project-Id-Version:\ Converse.js\ $(VERSION)/ locale/converse.pot
-	$(SED) -ri s/\"version\":\ \"[0-9]\+\.[0-9]\+\.[0-9]\+\"/\"version\":\ \"$(VERSION)\"/ package.json
-	$(SED) -ri s/--package-version=[0-9]\+\.[0-9]\+\.[0-9]\+/--package-version=$(VERSION)/ Makefile
-	$(SED) -ri s/v[0-9]\+\.[0-9]\+\.[0-9]\+\.zip/v$(VERSION)\.zip/ index.html
-	$(SED) -ri s/v[0-9]\+\.[0-9]\+\.[0-9]\+\.tar\.gz/v$(VERSION)\.tar\.gz/ index.html
-	$(SED) -ri s/version\ =\ \'[0-9]\+\.[0-9]\+\.[0-9]\+\'/version\ =\ \'$(VERSION)\'/ docs/source/conf.py
-	$(SED) -ri s/release\ =\ \'[0-9]\+\.[0-9]\+\.[0-9]\+\'/release\ =\ \'$(VERSION)\'/ docs/source/conf.py
-	$(SED) -ri "s/(Unreleased)/`date +%Y-%m-%d`/" CHANGES.md
-	$(SED) -ri "s/cdn.conversejs.org\/[0-9]+\.[0-9]+\.[0-9]+/cdn.conversejs.org\/$(VERSION)/" docs/source/quickstart.rst
+	$(SED) -i '/^_converse.VERSION_NAME =/s/=.*/= "v$(VERSION)";/' src/headless/converse-core.js
+	$(SED) -i '/Version:/s/:.*/: $(VERSION)/' COPYRIGHT
+	$(SED) -i '/Project-Id-Version:/s/:.*/: Converse.js $(VERSION)\n"/' locale/converse.pot
+	$(SED) -i '/"version":/s/:.*/: "$(VERSION)",/' package.json
+	$(SED) -i '/"version":/s/:.*/: "$(VERSION)",/' src/headless/package.json
+	$(SED) -ri 's/--package-version=$(VERSION_FORMAT)/--package-version=$(VERSION)/' Makefile
+	$(SED) -i -e "/version =/s/=.*/= '$(VERSION)'/" -e "/release =/s/=.*/= '$(VERSION)'/" docs/source/conf.py
+	$(SED) -i "s/[Uu]nreleased/`date +%Y-%m-%d`/" CHANGES.md
+	$(SED) -ri 's,cdn.conversejs.org/$(VERSION_FORMAT),cdn.conversejs.org/$(VERSION),' docs/source/quickstart.rst
 	make pot
 	make po
 	make po2json
 	make build
+	mkdir -p 'converse-assets-$(VERSION)'
+	$(INSTALL) -D dist/converse.js 'converse-assets-$(VERSION)/converse.js'
+	$(INSTALL) -D dist/converse.min.js 'converse-assets-$(VERSION)/converse.min.js'
+	$(INSTALL) -D dist/converse.min.js.map 'converse-assets-$(VERSION)/converse.min.js.map'
+	$(INSTALL) -D dist/converse-headless.js 'converse-assets-$(VERSION)/converse-headless.js'
+	$(INSTALL) -D dist/converse-headless.min.js 'converse-assets-$(VERSION)/converse-headless.min.js'
+	$(INSTALL) -D dist/converse-headless.min.js.map 'converse-assets-$(VERSION)/converse-headless.min.js.map'
+	$(INSTALL) -D css/converse.css 'converse-assets-$(VERSION)/css/converse.css'
+	$(INSTALL) -D css/converse.min.css 'converse-assets-$(VERSION)/css/converse.min.css'
+	cp -r css/webfonts 'converse-assets-$(VERSION)/css/'
+	cp -r sounds 'converse-assets-$(VERSION)/'
+	find locale -type f -name '*.json' \
+		-exec $(INSTALL) -D '{}' 'converse-assets-$(VERSION)/{}' \;
+	zip -r 'converse-assets-$(VERSION).zip' 'converse-assets-$(VERSION)'
+	rm -rf 'converse-assets-$(VERSION)'
+
 
 ########################################################################
 ## Install dependencies
 
-stamp-npm: package.json package-lock.json
-	npm install
-	touch stamp-npm
+$(LERNA):
+	npm install lerna
 
-stamp-bundler: Gemfile
-	mkdir -p .bundle
-	$(RVM_USE)
-	gem install --user bundler --bindir .bundle/bin
-	$(BUNDLE) install --path .bundle --binstubs .bundle/bin
-	touch stamp-bundler
+stamp-npm: $(LERNA) package.json package-lock.json src/headless/package.json
+	$(LERNA) bootstrap --hoist
+	touch stamp-npm
 
 .PHONY: clean
 clean:
-	rm -rf node_modules .bundle stamp-npm
-	rm dist/*.min.js
-	rm css/theme.min.css
-	rm css/converse.min.css
-	rm css/*.map
+	rm -rf node_modules stamp-npm
+	rm -f dist/*.min.js*
+	rm -f css/*.min.css
+	rm -f css/*.map
+	rm -f css/*.zip
+	rm -f *.zip
 
 .PHONY: dev
-dev: stamp-bundler stamp-npm
+dev: stamp-npm
 
 ########################################################################
 ## Builds
 
 .PHONY: css
-css: dev sass/*.scss css/converse.css css/converse.min.css css/theme.min.css css/inverse.css css/inverse.min.css css/fonts.css
-
-css/inverse.css:: dev sass sass
-	$(SASS) -I $(BOURBON) -I $(BOOTSTRAP) sass/inverse.scss css/inverse.css
+css: dev sass/*.scss css/converse.css css/converse.min.css css/website.css css/website.min.css css/font-awesome.css
 
 css/converse.css:: dev sass
-	$(SASS) -I $(BOURBON) -I $(BOOTSTRAP) sass/converse.scss css/converse.css
+	$(SASS) --source-map true --include-path $(BOURBON) --include-path $(BOOTSTRAP) sass/converse.scss css/converse.css
 
-css/fonts.css:: dev sass
-	$(SASS) -I $(BOURBON) -I $(BOOTSTRAP) sass/font-awesome.scss $@
+css/website.css:: dev sass
+	$(SASS) --source-map true --include-path $(BOURBON) --include-path $(BOOTSTRAP) sass/website.scss $@
+
+css/font-awesome.css:: dev sass
+	$(SASS) --source-map true --include-path $(BOURBON) --include-path $(BOOTSTRAP) sass/font-awesome.scss $@
 
 css/%.min.css:: css/%.css
 	make dev
 	$(CLEANCSS) $< > $@
 
-.PHONY: watch
-watch: dev
-	$(SASS) --watch -I $(BOURBON) -I $(BOOTSTRAP) sass:css
+.PHONY: watchcss
+watchcss: dev
+	$(SASS) --watch --source-map true --include-path $(BOURBON) --include-path $(BOOTSTRAP) -o ./css/ ./sass/
 
 .PHONY: watchjs
-watchjs: dev
-	$(BABEL) --source-maps --watch=./src --out-dir=./builds
+watchjs: dev dist/converse-headless.js
+	$(NPX)  webpack --mode=development  --watch
 
-transpile: dev src
-	$(BABEL) --source-maps --out-dir=./builds ./src
-	$(BABEL) --source-maps --out-dir=./builds ./node_modules/backbone.vdomview/backbone.vdomview.js
-	touch transpile
+.PHONY: watchjsheadless
+watchjsheadless: dev
+	$(NPX)  webpack --mode=development  --watch --type=headless
+
+.PHONY: watch
+watch: dev
+	make -j 3 watchcss  watchjsheadless watchjs
 
 .PHONY: logo
 logo: logo/conversejs-transparent16.png \
-      logo/conversejs-transparent19.png \
-      logo/conversejs-transparent48.png \
-      logo/conversejs-transparent128.png \
-      logo/conversejs-transparent512.png \
-      logo/conversejs-filled16.png \
-      logo/conversejs-filled19.png \
-      logo/conversejs-filled48.png \
-      logo/conversejs-filled128.png \
-      logo/conversejs-filled512.png \
+	  logo/conversejs-transparent19.png \
+	  logo/conversejs-transparent48.png \
+	  logo/conversejs-transparent128.png \
+	  logo/conversejs-transparent512.png \
+	  logo/conversejs-filled16.png \
+	  logo/conversejs-filled19.png \
+	  logo/conversejs-filled48.png \
+	  logo/conversejs-filled128.png \
+	  logo/conversejs-filled512.png \
 
 logo/conversejs-transparent%.png:: logo/conversejs-transparent.svg
 	$(INKSCAPE) -e $@ -w $* $<
@@ -182,37 +194,35 @@ logo/conversejs-filled%.png:: logo/conversejs-filled.svg
 	$(OXIPNG) $@
 
 BUILDS = dist/converse.js \
-		 dist/converse.min.js \
-         dist/converse-headless.js \
-		 dist/converse-headless.min.js \
-		 dist/converse-no-dependencies.min.js \
-		 dist/converse-no-dependencies.js
+	dist/converse.min.js \
+	dist/converse-headless.js \
+	dist/converse-headless.min.js \
+	dist/converse-no-dependencies.min.js \
+	dist/converse-no-dependencies.js \
+	dist/converse-no-dependencies-es2015.js
 
-# dist/converse-esnext.js \
-# dist/converse-esnext.min.js \
+dist/converse.js: src webpack.config.js stamp-npm @converse/headless
+	$(NPX)  webpack --mode=development
+dist/converse.min.js: src webpack.config.js stamp-npm @converse/headless
+	$(NPX)  webpack --mode=production
+dist/converse-headless.js: src webpack.config.js stamp-npm @converse/headless
+	$(NPX)  webpack --mode=development --type=headless
+dist/converse-headless.min.js: src webpack.config.js stamp-npm @converse/headless
+	$(NPX)  webpack --mode=production --type=headless
+dist/converse-no-dependencies.js: src webpack.config.js stamp-npm @converse/headless
+	$(NPX)  webpack --mode=development --type=nodeps
+dist/converse-no-dependencies.min.js: src webpack.config.js stamp-npm @converse/headless
+	$(NPX)  webpack --mode=production --type=nodeps
+dist/converse-no-dependencies-es2015.js: src webpack.config.js stamp-npm @converse/headless
+	$(NPX)  webpack --mode=development --type=nodeps --lang=es2015
 
-dist/converse.js: transpile src stamp-npm
-	$(RJS) -o src/build.js include=converse out=dist/converse.js optimize=none 
-dist/converse.min.js: transpile src stamp-npm
-	$(RJS) -o src/build.js include=converse out=dist/converse.min.js
-dist/converse-headless.js: transpile src stamp-npm
-	$(RJS) -o src/build.js paths.converse=src/headless include=converse out=dist/converse-headless.js optimize=none 
-dist/converse-headless.min.js: transpile src stamp-npm
-	$(RJS) -o src/build.js paths.converse=src/headless include=converse out=dist/converse-headless.min.js
-dist/converse-esnext.js: src stamp-npm
-	$(RJS) -o src/build-esnext.js include=converse out=dist/converse-esnext.js optimize=none 
-dist/converse-esnext.min.js: src stamp-npm
-	$(RJS) -o src/build-esnext.js include=converse out=dist/converse-esnext.min.js
-dist/converse-no-dependencies.js: transpile src stamp-npm
-	$(RJS) -o src/build-no-dependencies.js optimize=none out=dist/converse-no-dependencies.js
-dist/converse-no-dependencies.min.js: transpile src stamp-npm
-	$(RJS) -o src/build-no-dependencies.js out=dist/converse-no-dependencies.min.js
+@converse/headless: src/headless
 
 .PHONY: dist
 dist:: build
 
 .PHONY: build
-build:: dev css transpile $(BUILDS)
+build:: dev css $(BUILDS)
 
 ########################################################################
 ## Tests
@@ -223,15 +233,29 @@ eslint: stamp-npm
 	$(ESLINT) spec/
 
 .PHONY: check
-check: eslint
-	LOG_CR_VERBOSITY=INFO $(CHROMIUM) --no-sandbox http://localhost:$(HTTPSERVE_PORT)/tests/index.html
+check: dist/converse.js eslint
+	LOG_CR_VERBOSITY=INFO $(CHROMIUM) --disable-gpu --no-sandbox http://localhost:$(HTTPSERVE_PORT)/tests/index.html
 
 ########################################################################
 ## Documentation
 
+./bin/activate:
+	virtualenv .
+
+.installed.cfg: requirements.txt buildout.cfg
+	./bin/pip install -r requirements.txt
+	./bin/buildout -v
+
+docsdev: ./bin/activate .installed.cfg
+
 .PHONY: html
-html:
+html: dev docsdev apidoc
 	rm -rf $(BUILDDIR)/html
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
+	make apidoc
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
+
+PHONY: apidoc
+apidoc:
+	$(JSDOC) --readme docs/source/jsdoc_intro.md -c docs/source/conf.json -d docs/html/api src/*.js

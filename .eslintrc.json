@@ -1,6 +1,7 @@
 {
     "parserOptions": {
-        "ecmaVersion": 2017
+        "ecmaVersion": 2017,
+        "sourceType": "module"
     },
     "env": {
         "browser": true,
@@ -9,29 +10,34 @@
     "plugins": ["lodash"],
     "extends": ["eslint:recommended", "plugin:lodash/canonical"],
     "globals": {
-        "window": true,
-        "sinon": true,
+        "Uint8Array": true,
+        "Promise": true,
+        "converse": true,
         "define": true,
-        "require": true
+        "require": true,
+        "sinon": true,
+        "window": true
     },
     "rules": {
         "lodash/prefer-lodash-method": [2, {
             "ignoreMethods": [
-                "find", "endsWith", "startsWith", "filter", "reduce",
+                "keys", "find", "endsWith", "startsWith", "filter", "reduce", "isArray", "create",
                 "map", "replace", "toLower", "split", "trim", "forEach", "toUpperCase", "includes"
             ]
         }],
+        "lodash/prefer-invoke-map": "off",
         "lodash/prefer-startswith": "off",
         "lodash/prefer-constant": "off",
         "lodash/prefer-noop": "off",
         "lodash/prefer-lodash-typecheck": "off",
+        "lodash/prefer-includes": "off",
         "lodash/preferred-alias": "off",
         "lodash/prefer-get": "off",
         "accessor-pairs": "error",
         "array-bracket-spacing": "off",
         "array-callback-return": "error",
         "arrow-body-style": "off",
-        "arrow-parens": "error",
+        "arrow-parens": "off",
         "arrow-spacing": "error",
         "block-scoped-var": "off",
         "block-spacing": "off",
@@ -106,12 +112,12 @@
         "no-bitwise": "off",
         "no-caller": "error",
         "no-console": "off",
-        "no-catch-shadow": "error",
+        "no-catch-shadow": "off",
         "no-cond-assign": [
             "error",
             "except-parens"
         ],
-        "no-confusing-arrow": "error",
+        "no-confusing-arrow": "off",
         "no-continue": "off",
         "no-div-regex": "error",
         "no-duplicate-imports": "error",
@@ -212,10 +218,7 @@
         "one-var": "off",
         "one-var-declaration-per-line": "off",
         "operator-assignment": "off",
-        "operator-linebreak": [
-            "error",
-            "after"
-        ],
+        "operator-linebreak": "off",
         "padded-blocks": "off",
         "prefer-arrow-callback": "off",
         "prefer-const": "error",

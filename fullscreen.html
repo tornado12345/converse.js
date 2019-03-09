@@ -3,19 +3,16 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>inVerse</title>
+    <title>Converse</title>
     <link rel="shortcut icon" type="image/ico" href="css/images/favicon.ico"/>
     <script type="text/javascript" src="inverse-analytics.js"></script>
     <noscript><p><img src="//stats.opkode.com/piwik.php?idsite=5" style="border:0;" alt="" /></p></noscript>
-    <link type="text/css" rel="stylesheet" media="screen" href="css/inverse.css" />
+    <link type="text/css" rel="stylesheet" media="screen" href="css/converse.css" />
+    <script src="3rdparty/libsignal-protocol.js"></script>
     <script src="dist/converse.js"></script>
 </head>
-<body class="reset">
-    <div class="content">
-        <div class="inner-content">
-            <h1 class="brand-heading"><i class="icon-conversejs"></i> Converse</h1>
-        </div>
-    </div>
+<body class="converse-fullscreen">
+<div id="conversejs-bg"></div>
 <script>
     /*
     @licstart
@@ -44,7 +41,6 @@
 
     For more information, please refer to <http://unlicense.org/>
     @licend
-
     */
     converse.initialize({
         authentication: 'login',

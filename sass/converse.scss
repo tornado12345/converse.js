@@ -1,15 +1,11 @@
 /*!
  * Converse.js (Web-based XMPP instant messaging client)
- * http://conversejs.org
+ * https://conversejs.org
  *
- * Copyright (c) 2012-2016, JC Brand <jc@opkode.com>
+ * Copyright (c) 2013-2018, JC Brand <jc@opkode.com>
  * Licensed under the Mozilla Public License
  */
 @import "font-awesome";
-@import "bourbon";
-@import "variables";
-@import "converse/variables";
-
 @import "bootstrap/scss/functions";
 @import "bootstrap/scss/variables";
 @import "bootstrap/scss/mixins";
@@ -27,9 +23,12 @@
     @import "bootstrap/scss/button-group";
     @import "bootstrap/scss/input-group";
     @import "bootstrap/scss/custom-forms";
+    @import "bootstrap/scss/nav";
+    @import "bootstrap/scss/navbar";
     @import "bootstrap/scss/card";
     @import "bootstrap/scss/breadcrumb";
     @import "bootstrap/scss/badge";
+    @import "bootstrap/scss/alert";
     @import "bootstrap/scss/media";
     @import "bootstrap/scss/list-group";
     @import "bootstrap/scss/close";
@@ -38,20 +37,21 @@
     @import "bootstrap/scss/popover";
     @import "bootstrap/scss/utilities";
 }
+
+@import "bourbon";
+@import "variables";
+
 @import "core";
-@import "converse/core";
-@import "profile";
+@import "forms";
 @import "chatbox";
-@import "converse/chatbox";
 @import "controlbox";
-@import "converse/controlbox";
-@import "roomslist";
+@import "modal";
 @import "roster";
+@import "lists";
 @import "chatrooms";
-@import "converse/chatrooms";
 @import "headline";
 @import "messages";
-@import "converse/minimized_chats";
+@import "minimized_chats";
 @import "bookmarks";
 @import "awesomplete";
 @import "embedded";

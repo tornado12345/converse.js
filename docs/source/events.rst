@@ -7,7 +7,7 @@
 Events and promises
 ===================
 
-Converse.js and its plugins emit various events which you can listen to via the
+Converse and its plugins emit various events which you can listen to via the
 :ref:`listen-grouping`.
 
 Some of these events are also available as `ES2015 Promises <http://es6-features.org/#PromiseUsage>`_,
@@ -19,6 +19,7 @@ The core events, which are also promises are:
 
 * `cachedRoster`_
 * `chatBoxesFetched`_
+* `connectionInitialized`_
 * `controlboxInitialized`_ (only via the `converse-controlbox` plugin)
 * `pluginsInitialized`_
 * `roomsPanelRendered`_ (only via the `converse-muc` plugin)
@@ -34,8 +35,33 @@ For more info on how to use (or add promises), you can read the
 Below we will now list all events and also specify whether they are available
 as promises.
 
-List of global events (and promises)
-------------------------------------
+Global events
+-------------
+
+With global events, we mean events triggered in the global context, i.e. on the
+`window` object in browsers.
+
+converse-loaded
+---------------
+
+Once Converse.js has loaded, it'll dispatch a custom event with the name
+``converse-loaded``.
+
+You can listen for this event in your scripts and thereby be informed as soon
+as converse.js has been loaded, which would mean it's safe to call
+``converse.initialize``.
+
+For example:
+
+.. code-block:: javascript
+
+    window.addEventListener('converse-loaded', () => {
+        converse.initialize();
+    });
+
+
+List protected of events (and promises)
+----------------------------------------
 
 Hooking into events that Converse.js emits is a great way to extend or
 customize its functionality.
@@ -149,6 +175,11 @@ When a chatbox has been minimized or maximized. Relevant to converse-chatview.js
 
 ``_converse.api.listen.on('chatBoxToggled', function (chatbox) { ... });``
 
+clearSession
+~~~~~~~~~~~~
+
+Called when the user is logging out and provides the opportunity to remove session data.
+
 connected
 ~~~~~~~~~
 
@@ -156,12 +187,21 @@ After connection has been established and converse.js has got all its ducks in a
 
 ``_converse.api.listen.on('connected', function () { ... });``
 
+connectionInitialized
+~~~~~~~~~~~~~~~~~~~~~
+
+Called once the ``Strophe.Connection`` constructor has been initialized, which
+will be responsible for managing the connection to the XMPP server.
+
 contactRequest
 ~~~~~~~~~~~~~~
 
 Someone has requested to subscribe to your presence (i.e. to be your contact).
 
-``_converse.api.listen.on('contactRequest', function (user_data) { ... });``
+The `Backbone.Model <http://backbonejs.org/#Model>`_ instance representing the
+roster contact is passed to the event listener.
+
+``_converse.api.listen.on('contactRequest', function (contact) { ... });``
 
 contactRemoved
 ~~~~~~~~~~~~~~
@@ -171,12 +211,13 @@ The user has removed a contact.
 ``_converse.api.listen.on('contactRemoved', function (data) { ... });``
 
 
-contactStatusChanged
-~~~~~~~~~~~~~~~~~~~~
+contactPresenceChanged
+~~~~~~~~~~~~~~~~~~~~~~
 
-When a chat buddy's chat status has changed.
+When a chat buddy's presence status has changed.
+The presence status is either `online`, `offline`, `dnd`, `away` or `xa`.
 
-``_converse.api.listen.on('contactStatusChanged', function (buddy) { ... });``
+``_converse.api.listen.on('contactPresenceChanged', function (presence) { ... });``
 
 contactStatusMessageChanged
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -250,6 +291,22 @@ as a `message` attribute which refers to the Message model.
         // The original chatbox is at `data.chatbox`.
     });
 
+
+messageNotification
+~~~~~~~~~~~~~~~~~~~
+
+Emitted just before an HTML5 message notification will be sent out.
+
+.. code-block:: javascript
+
+    _converse.api.listen.on('messageNotification', stanza => {
+
+        const body = sizzle(`encrypted[xmlns="${Strophe.NS.OMEMO}"]`, message).length ?
+                        __('OMEMO Message received') :
+                        _.get(message.querySelector('body'), 'textContent');
+        alert(body);
+    });
+
 messageSend
 ~~~~~~~~~~~
 
@@ -285,24 +342,6 @@ Also available as an `ES2015 Promise <http://es6-features.org/#PromiseUsage>`_:
         // Your code here...
     });
 
-reconnecting
-~~~~~~~~~~~~
-
-Fired once converse.js has determined that it will attempt to reconnect (and
-each subsequent time, if it attempts repeatedly).
-
-reconnected
-~~~~~~~~~~~
-
-After the connection has dropped and converse.js has reconnected.
-Any Strophe stanza handlers (as registered via `converse.listen.stanza`) will
-have to be registered anew.
-
-.. code-block:: javascript
-
-    _converse.api.listen.on('reconnected', function () { ... });
-
-
 privateChatsAutoJoined
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -321,8 +360,35 @@ Also available as an `ES2015 Promise <http://es6-features.org/#PromiseUsage>`_.
         // Your code here...
     });
 
+
+reconnecting
+~~~~~~~~~~~~
+
+Fired once converse.js has determined that it will attempt to reconnect (and
+each subsequent time, if it attempts repeatedly).
+
+reconnected
+~~~~~~~~~~~
+
+After the connection has dropped and converse.js has reconnected.
+Any Strophe stanza handlers (as registered via `converse.listen.stanza`) will
+have to be registered anew.
+
+.. code-block:: javascript
+
+    _converse.api.listen.on('reconnected', function () { ... });
+
+registeredGlobalEventHandlers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Called once Converse has registered its global event handlers (for events such
+as window resize or unload).
+
+Plugins can listen to this event as cue to register their own global event
+handlers.
+
 roomsAutoJoined
----------------
+~~~~~~~~~~~~~~~
 
 Emitted once any rooms that have been configured to be automatically joined,
 specified via the _`auto_join_rooms` setting, have been entered.
@@ -457,6 +523,14 @@ Similar to `rosterInitialized`, but instead pertaining to reconnection. This
 event indicates that the Backbone collections representing the roster and its
 groups are now again available after converse.js has reconnected.
 
+serviceDiscovered
+~~~~~~~~~~~~~~~~~
+
+When converse.js has learned of a service provided by the XMPP server. See XEP-0030.
+
+``_converse.api.listen.on('serviceDiscovered', function (service) { ... });``
+
+
 .. _`statusInitialized`:
 
 statusInitialized
@@ -488,12 +562,12 @@ When own custom status message has changed.
 
 ``_converse.api.listen.on('statusMessageChanged', function (message) { ... });``
 
-serviceDiscovered
-~~~~~~~~~~~~~~~~~
+streamFeaturesAdded
+~~~~~~~~~~~~~~~~~~~
 
-When converse.js has learned of a service provided by the XMPP server. See XEP-0030.
-
-``_converse.api.listen.on('serviceDiscovered', function (service) { ... });``
+Emitted as soon as Converse has processed the stream features as advertised by
+the server. If you want to check whether a stream feature is supported before
+proceeding, then you'll first want to wait for this event.
 
 windowStateChanged
 ~~~~~~~~~~~~~~~~~~

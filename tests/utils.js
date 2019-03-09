@@ -1,12 +1,13 @@
 (function (root, factory) {
-    define(['converse', 'es6-promise',  'mock', 'wait-until-promise'], factory);
-}(this, function (converse_api, Promise, mock, waitUntilPromise) {
-    var _ = converse_api.env._;
-    var $msg = converse_api.env.$msg;
-    var $pres = converse_api.env.$pres;
-    var $iq = converse_api.env.$iq;
-    var Strophe = converse_api.env.Strophe;
-    var u = converse_api.env.utils;
+    define(['es6-promise',  'mock', 'wait-until-promise'], factory);
+}(this, function (Promise, mock, waitUntilPromise) {
+    var _ = converse.env._;
+    var $msg = converse.env.$msg;
+    var $pres = converse.env.$pres;
+    var $iq = converse.env.$iq;
+    var Strophe = converse.env.Strophe;
+    var sizzle = converse.env.sizzle;
+    var u = converse.env.utils;
     var utils = {};
 
     if (typeof window.Promise === 'undefined') {
@@ -14,37 +15,30 @@
     }
     utils.waitUntil = waitUntilPromise.default;
 
-    utils.waitUntilDiscoConfirmed = function (_converse, entity_jid, identities, features, items, type) {
-        if (_.isNil(type)) {
-            type = 'info';
-        }
-        var IQ_disco, stanza;
-        return utils.waitUntil(function () {
-            IQ_disco = _.filter(_converse.connection.IQ_stanzas, function (iq) {
-                return iq.nodeTree.querySelector('query[xmlns="http://jabber.org/protocol/disco#'+type+'"]') &&
-                    iq.nodeTree.getAttribute('to') === entity_jid;
-            }).pop();
-            return !_.isUndefined(IQ_disco);
-        }, 300).then(function () {
-            var info_IQ_id = IQ_disco.nodeTree.getAttribute('id');
-            var stanza = $iq({
-                'type': 'result',
-                'from': entity_jid,
-                'to': 'dummy@localhost/resource',
-                'id': info_IQ_id
-            }).c('query', {'xmlns': 'http://jabber.org/protocol/disco#'+type});
+    utils.waitUntilDiscoConfirmed = async function (_converse, entity_jid, identities, features=[], items=[], type='info') {
+        const iq = await utils.waitUntil(() => {
+            return _.filter(
+                _converse.connection.IQ_stanzas,
+                (iq) => sizzle(`iq[to="${entity_jid}"] query[xmlns="http://jabber.org/protocol/disco#${type}"]`, iq.nodeTree).length
+            ).pop();
+        }, 300);
+        const stanza = $iq({
+            'type': 'result',
+            'from': entity_jid,
+            'to': 'dummy@localhost/resource',
+            'id': iq.nodeTree.getAttribute('id'),
+        }).c('query', {'xmlns': 'http://jabber.org/protocol/disco#'+type});
 
-            _.forEach(identities, function (identity) {
-                stanza.c('identity', {'category': identity.category, 'type': identity.type}).up()
-            });
-            _.forEach(features, function (feature) {
-                stanza.c('feature', {'var': feature}).up();
-            });
-            _.forEach(items, function (item) {
-                stanza.c('item', {'jid': item}).up();
-            });
-            _converse.connection._dataRecv(utils.createRequest(stanza));
+        _.forEach(identities, function (identity) {
+            stanza.c('identity', {'category': identity.category, 'type': identity.type}).up()
         });
+        _.forEach(features, function (feature) {
+            stanza.c('feature', {'var': feature}).up();
+        });
+        _.forEach(items, function (item) {
+            stanza.c('item', {'jid': item}).up();
+        });
+        _converse.connection._dataRecv(utils.createRequest(stanza));
     }
 
     utils.createRequest = function (iq) {
@@ -68,7 +62,7 @@
     };
 
     utils.openControlBox = function () {
-        var toggle = document.querySelector(".toggle-controlbox");
+        const toggle = document.querySelector(".toggle-controlbox");
         if (!u.isVisible(document.querySelector("#controlbox"))) {
             if (!u.isVisible(toggle)) {
                 u.removeClass('hidden', toggle);
@@ -98,87 +92,110 @@
         return views;
     };
 
-    utils.openChatBoxFor = function (converse, jid) {
-        return converse.roster.get(jid).trigger("open");
+    utils.openChatBoxFor = function (_converse, jid) {
+        _converse.roster.get(jid).trigger("open");
+        return utils.waitUntil(() => _converse.chatboxviews.get(jid), 1000);
     };
 
-    utils.openChatRoomViaModal = function (_converse, jid, nick) {
+    utils.openChatRoomViaModal = async function (_converse, jid, nick='') {
         // Opens a new chatroom
-        return new Promise(function (resolve, reject) {
-            utils.openControlBox(_converse);
-            var roomspanel = _converse.chatboxviews.get('controlbox').roomspanel;
-            roomspanel.el.querySelector('.trigger-add-chatrooms-modal').click();
-            utils.closeControlBox(_converse);
-            const modal = roomspanel.add_room_modal;
-            utils.waitUntil(function () {
-                return u.isVisible(modal.el);
-            }, 1000).then(function () {
-                modal.el.querySelector('input[name="chatroom"]').value = jid;
-                modal.el.querySelector('form input[type="submit"]').click();
-                resolve();
-            }).catch(_.partial(console.error, _));
-        }).catch(_.partial(console.error, _));
+        utils.openControlBox(_converse);
+        const roomspanel = _converse.chatboxviews.get('controlbox').roomspanel;
+        roomspanel.el.querySelector('.show-add-muc-modal').click();
+        utils.closeControlBox(_converse);
+        const modal = roomspanel.add_room_modal;
+        await utils.waitUntil(() => u.isVisible(modal.el), 1500)
+        modal.el.querySelector('input[name="chatroom"]').value = jid;
+        modal.el.querySelector('input[name="nickname"]').value = nick;
+        modal.el.querySelector('form input[type="submit"]').click();
+        await utils.waitUntil(() => _converse.chatboxviews.get(jid), 1000);
+        return _converse.chatboxviews.get(jid);
     };
 
     utils.openChatRoom = function (_converse, room, server, nick) {
-        _converse.api.rooms.open(`${room}@${server}`);
+        return _converse.api.rooms.open(`${room}@${server}`);
     };
 
-    utils.openAndEnterChatRoom = function (_converse, room, server, nick) {
-        let last_stanza;
+    utils.openAndEnterChatRoom = async function (_converse, room, server, nick, features=[]) {
+        const room_jid = `${room}@${server}`.toLowerCase();
+        const stanzas = _converse.connection.IQ_stanzas;
+        await _converse.api.rooms.open(room_jid);
+        const view = _converse.chatboxviews.get(room_jid);
+        let stanza = await utils.waitUntil(() => _.get(_.filter(
+            stanzas,
+            iq => iq.nodeTree.querySelector(
+                `iq[to="${room_jid}"] query[xmlns="http://jabber.org/protocol/disco#info"]`
+            )).pop(), 'nodeTree'));
 
-        return new Promise(function (resolve, reject) {
-            _converse.api.rooms.open(`${room}@${server}`);
-            const view = _converse.chatboxviews.get((room+'@'+server).toLowerCase());
-            // We pretend this is a new room, so no disco info is returned.
-            last_stanza = _.last(_converse.connection.IQ_stanzas).nodeTree;
-            const IQ_id = last_stanza.getAttribute('id');
-            const features_stanza = $iq({
-                    'from': room+'@'+server,
-                    'id': IQ_id,
-                    'to': nick+'@'+server,
-                    'type': 'error'
-                }).c('error', {'type': 'cancel'})
-                    .c('item-not-found', {'xmlns': "urn:ietf:params:xml:ns:xmpp-stanzas"});
-            _converse.connection._dataRecv(utils.createRequest(features_stanza));
+        const features_stanza = $iq({
+            'from': room_jid,
+            'id': stanza.getAttribute('id'),
+            'to': 'dummy@localhost/desktop',
+            'type': 'result'
+        }).c('query', { 'xmlns': 'http://jabber.org/protocol/disco#info'})
+            .c('identity', {
+                'category': 'conference',
+                'name': room[0].toUpperCase() + room.slice(1),
+                'type': 'text'
+            }).up();
 
-            utils.waitUntil(() => {
-                return _.filter(
-                    _converse.connection.IQ_stanzas, (node) => node.nodeTree.querySelector('query').getAttribute('node') === 'x-roomuser-item'
-                ).length
-            }).then(function () {
-                const last_stanza = _.filter(
-                    _converse.connection.IQ_stanzas, (node) => node.nodeTree.querySelector('query').getAttribute('node') === 'x-roomuser-item'
-                ).pop().nodeTree;
+        features = features.length ? features : [
+            'http://jabber.org/protocol/muc',
+            'jabber:iq:register',
+            Strophe.NS.SID,
+            Strophe.NS.MAM,
+            'muc_passwordprotected',
+            'muc_hidden',
+            'muc_temporary',
+            'muc_open',
+            'muc_unmoderated',
+            'muc_anonymous']
+        features.forEach(f => features_stanza.c('feature', {'var': f}).up());
+        features_stanza.c('x', { 'xmlns':'jabber:x:data', 'type':'result'})
+            .c('field', {'var':'FORM_TYPE', 'type':'hidden'})
+                .c('value').t('http://jabber.org/protocol/muc#roominfo').up().up()
+            .c('field', {'type':'text-single', 'var':'muc#roominfo_description', 'label':'Description'})
+                .c('value').t('This is the description').up().up()
+            .c('field', {'type':'text-single', 'var':'muc#roominfo_occupants', 'label':'Number of occupants'})
+                .c('value').t(0);
+        _converse.connection._dataRecv(utils.createRequest(features_stanza));
 
-                // The XMPP server returns the reserved nick for this user.
-                const IQ_id = last_stanza.getAttribute('id');
-                const stanza = $iq({
-                    'type': 'result',
-                    'id': IQ_id,
-                    'from': view.model.get('jid'),
-                    'to': _converse.connection.jid 
-                }).c('query', {'xmlns': 'http://jabber.org/protocol/disco#info', 'node': 'x-roomuser-item'})
-                    .c('identity', {'category': 'conference', 'name': nick, 'type': 'text'});
-                _converse.connection._dataRecv(utils.createRequest(stanza));
-                // The user has just entered the room (because join was called)
-                // and receives their own presence from the server.
-                // See example 24: http://xmpp.org/extensions/xep-0045.html#enter-pres
-                var presence = $pres({
-                        to: _converse.connection.jid,
-                        from: room+'@'+server+'/'+nick,
-                        id: 'DC352437-C019-40EC-B590-AF29E879AF97'
-                }).c('x').attrs({xmlns:'http://jabber.org/protocol/muc#user'})
-                    .c('item').attrs({
-                        affiliation: 'member',
-                        jid: _converse.bare_jid,
-                        role: 'participant'
-                    }).up()
-                    .c('status').attrs({code:'110'});
-                _converse.connection._dataRecv(utils.createRequest(presence));
-                resolve();
-            });
-        });
+        const iq = await utils.waitUntil(() => _.filter(
+            stanzas,
+            s => sizzle(`iq[to="${room_jid}"] query[node="x-roomuser-item"]`, s.nodeTree).length
+        ).pop());
+
+        // We remove the stanza, otherwise we might get stale stanzas returned in our filter above.
+        stanzas.splice(stanzas.indexOf(iq), 1)
+
+        // The XMPP server returns the reserved nick for this user.
+        const IQ_id = iq.nodeTree.getAttribute('id');
+        stanza = $iq({
+            'type': 'result',
+            'id': IQ_id,
+            'from': view.model.get('jid'),
+            'to': _converse.connection.jid
+        }).c('query', {'xmlns': 'http://jabber.org/protocol/disco#info', 'node': 'x-roomuser-item'})
+            .c('identity', {'category': 'conference', 'name': nick, 'type': 'text'});
+        _converse.connection._dataRecv(utils.createRequest(stanza));
+        await utils.waitUntil(() => view.model.get('nick'));
+
+        // The user has just entered the room (because join was called)
+        // and receives their own presence from the server.
+        // See example 24: https://xmpp.org/extensions/xep-0045.html#enter-pres
+        var presence = $pres({
+                to: _converse.connection.jid,
+                from: `${room_jid}/${nick}`,
+                id: u.getUniqueId()
+        }).c('x').attrs({xmlns:'http://jabber.org/protocol/muc#user'})
+            .c('item').attrs({
+                affiliation: 'owner',
+                jid: _converse.bare_jid,
+                role: 'moderator'
+            }).up()
+            .c('status').attrs({code:'110'});
+        _converse.connection._dataRecv(utils.createRequest(presence));
+        await utils.waitUntil(() => (view.model.get('connection_status') === converse.ROOMSTATUS.ENTERED));
     };
 
     utils.clearBrowserStorage = function () {
@@ -234,7 +251,7 @@
                 converse.roster.create({
                     'ask': ask,
                     'fullname': names[i],
-                    'jid': jid, 
+                    'jid': jid,
                     'requesting': requesting,
                     'subscription': subscription
                 });
@@ -243,10 +260,45 @@
         return this;
     };
 
+    utils.waitForRoster = async function (_converse, type='current', length, include_nick=true) {
+        const iq = await utils.waitUntil(() =>
+            _.filter(
+                _converse.connection.IQ_stanzas,
+                iq => sizzle(`iq[type="get"] query[xmlns="${Strophe.NS.ROSTER}"]`, iq.nodeTree).length
+            ).pop());
+
+        const result = $iq({
+            'to': _converse.connection.jid,
+            'type': 'result',
+            'id': iq.nodeTree.getAttribute('id')
+        }).c('query', {
+            'xmlns': 'jabber:iq:roster'
+        });
+        if (type === 'pending' || type === 'all') {
+            mock.pend_names.slice(0, length).map(name =>
+                result.c('item', {
+                    jid: name.replace(/ /g,'.').toLowerCase() + '@localhost',
+                    name: include_nick ? name : undefined,
+                    subscription: 'to'
+                }).up()
+            );
+        } else if (type === 'current' || type === 'all') {
+            mock.cur_names.slice(0, length).map(name =>
+                result.c('item', {
+                    jid: name.replace(/ /g,'.').toLowerCase() + '@localhost',
+                    name: include_nick ? name : undefined,
+                    subscription: 'both'
+                }).up()
+            );
+        }
+        _converse.connection._dataRecv(utils.createRequest(result));
+        await _converse.api.waitUntil('rosterContactsFetched');
+    };
+
     utils.createGroupedContacts = function (converse) {
         /* Create grouped contacts
          */
-        var i=0, j=0;
+        let i=0, j=0;
         _.each(_.keys(mock.groups), function (name) {
             j = i;
             for (i=j; i<j+mock.groups[name]; i++) {
@@ -272,13 +324,15 @@
                .c('active', {'xmlns': Strophe.NS.CHATSTATES}).tree();
     }
 
-    utils.sendMessage = function (chatboxview, message) {
-        chatboxview.el.querySelector('.chat-textarea').value = message;
-        chatboxview.keyPressed({
-            target: chatboxview.el.querySelector('textarea.chat-textarea'),
+    utils.sendMessage = function (view, message) {
+        const promise = new Promise((resolve, reject) => view.on('messageInserted', resolve));
+        view.el.querySelector('.chat-textarea').value = message;
+        view.keyPressed({
+            target: view.el.querySelector('textarea.chat-textarea'),
             preventDefault: _.noop,
             keyCode: 13
         });
+        return promise;
     };
     return utils;
 }));

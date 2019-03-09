@@ -1,12 +1,13 @@
 (function (root, factory) {
-    define(["jasmine", "mock", "converse-core", "test-utils", "utils"], factory);
-} (this, function (jasmine, mock, converse, test_utils, u) {
+    define(["jasmine", "mock", "test-utils"], factory);
+} (this, function (jasmine, mock, test_utils) {
     var _ = converse.env._;
     var $iq = converse.env.$iq;
+    var u = converse.env.utils;
 
     describe("Profiling", function() {
         xit("adds hundreds of contacts to the roster",
-                mock.initConverseWithPromises(
+                mock.initConverse(
                     null, ['rosterGroupsFetched'], {},
                     function (done, _converse) {
 
@@ -50,7 +51,7 @@
         }));
 
         xit("adds hundreds of contacts to the roster, with roster groups",
-                mock.initConverseWithPromises(
+                mock.initConverse(
                     null, ['rosterGroupsFetched'], {},
                     function (done, _converse) {
             

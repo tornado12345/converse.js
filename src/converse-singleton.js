@@ -1,10 +1,8 @@
-// Converse.js (A browser based XMPP chat client)
-// http://conversejs.org
+// Converse.js
+// https://conversejs.org
 //
-// Copyright (c) 2012-2017, JC Brand <jc@opkode.com>
+// Copyright (c) 2013-2019, the Converse.js developers
 // Licensed under the Mozilla Public License (MPLv2)
-//
-/*global Backbone, define, window, JSON */
 
 /* converse-singleton
  * ******************
@@ -15,76 +13,103 @@
  *
  * This plugin makes sense in mobile or fullscreen chat environments (as
  * configured by the `view_mode` setting).
- *
  */
-(function (root, factory) {
-    define(
-        ["converse-core", "converse-chatview"],
-        factory);
-}(this, function (converse) {
-    "use strict";
-    const { _, Strophe } = converse.env;
 
-    function hideChat (view) {
-        if (view.model.get('id') === 'controlbox') { return; }
-        view.model.save({'hidden': true});
-        view.hide();
-    }
+import "converse-chatview";
+import converse from "@converse/headless/converse-core";
 
-    converse.plugins.add('converse-singleton', {
-        // It's possible however to make optional dependencies non-optional.
-        // If the setting "strict_plugin_dependencies" is set to true,
-        // an error will be raised if the plugin is not found.
+const { _, Strophe } = converse.env;
+const u = converse.env.utils;
+
+
+function hideChat (view) {
+    if (view.model.get('id') === 'controlbox') { return; }
+    u.safeSave(view.model, {'hidden': true});
+    view.hide();
+}
+
+
+converse.plugins.add('converse-singleton', {
+    // It's possible however to make optional dependencies non-optional.
+    // If the setting "strict_plugin_dependencies" is set to true,
+    // an error will be raised if the plugin is not found.
+    //
+    // NB: These plugins need to have already been loaded via require.js.
+    dependencies: ['converse-chatboxes', 'converse-muc', 'converse-muc-views', 'converse-controlbox', 'converse-rosterview'],
+
+    overrides: {
+        // overrides mentioned here will be picked up by converse.js's
+        // plugin architecture they will replace existing methods on the
+        // relevant objects or classes.
         //
-        // NB: These plugins need to have already been loaded via require.js.
-        dependencies: ['converse-chatboxes', 'converse-muc', 'converse-controlbox', 'converse-rosterview'],
+        // new functions which don't exist yet can also be added.
+        ChatBoxes: {
 
-        enabled (_converse) {
-            return _.includes(['mobile', 'fullscreen', 'embedded'], _converse.view_mode);
-        },
+            chatBoxMayBeShown (chatbox) {
+                const { _converse } = this.__super__;
+                if (chatbox.get('id') === 'controlbox') {
+                    return true;
+                }
+                if (_converse.isUniView()) {
+                    const any_chats_visible = _converse.chatboxes
+                        .filter(cb => cb.get('id') != 'controlbox')
+                        .filter(cb => !cb.get('hidden')).length > 0;
 
-        overrides: {
-            // overrides mentioned here will be picked up by converse.js's
-            // plugin architecture they will replace existing methods on the
-            // relevant objects or classes.
-            //
-            // new functions which don't exist yet can also be added.
-            ChatBoxes: {
-                chatBoxMayBeShown (chatbox) {
-                    return !chatbox.get('hidden');
-                },
+                    if (any_chats_visible) {
+                        return !chatbox.get('hidden');
+                    } else {
+                        return true;
+                    }
+                } else {
+                    return this.__super__.chatBoxMayBeShown.apply(this, arguments);
+                }
+            },
 
-                createChatBox (jid, attrs) {
-                    /* Make sure new chat boxes are hidden by default. */
+            createChatBox (jid, attrs) {
+                /* Make sure new chat boxes are hidden by default. */
+                const { _converse } = this.__super__;
+                if (_converse.isUniView()) {
                     attrs = attrs || {};
                     attrs.hidden = true;
-                    return this.__super__.createChatBox.call(this, jid, attrs);
                 }
-            },
+                return this.__super__.createChatBox.call(this, jid, attrs);
+            }
+        },
 
-            ChatBoxView: {
-                shouldShowOnTextMessage () {
+        ChatBoxView: {
+            shouldShowOnTextMessage () {
+                const { _converse } = this.__super__;
+                if (_converse.isUniView()) {
                     return false;
-                },
-
-                _show (focus) {
-                    /* We only have one chat visible at any one
-                     * time. So before opening a chat, we make sure all other
-                     * chats are hidden.
-                     */
-                    _.each(this.__super__._converse.chatboxviews.xget(this.model.get('id')), hideChat);
-                    this.model.set('hidden', false);
-                    return this.__super__._show.apply(this, arguments);
+                } else { 
+                    return this.__super__.shouldShowOnTextMessage.apply(this, arguments);
                 }
             },
 
-            ChatRoomView: {
-                show (focus) {
+            _show (focus) {
+                /* We only have one chat visible at any one
+                 * time. So before opening a chat, we make sure all other
+                 * chats are hidden.
+                 */
+                const { _converse } = this.__super__;
+                if (_converse.isUniView()) {
                     _.each(this.__super__._converse.chatboxviews.xget(this.model.get('id')), hideChat);
-                    this.model.set('hidden', false);
-                    return this.__super__.show.apply(this, arguments);
+                    u.safeSave(this.model, {'hidden': false});
                 }
+                return this.__super__._show.apply(this, arguments);
+            }
+        },
+
+        ChatRoomView: {
+            show (focus) {
+                const { _converse } = this.__super__;
+                if (_converse.isUniView()) {
+                    _.each(this.__super__._converse.chatboxviews.xget(this.model.get('id')), hideChat);
+                    u.safeSave(this.model, {'hidden': false});
+                }
+                return this.__super__.show.apply(this, arguments);
             }
         }
-    });
-}));
+    }
+});
+

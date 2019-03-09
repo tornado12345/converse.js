@@ -2,10 +2,9 @@
     define([
         "jasmine",
         "jquery",
-        "converse-core",
         "mock",
         "test-utils"], factory);
-} (this, function (jasmine, $, converse, mock, test_utils) {
+} (this, function (jasmine, $, mock, test_utils) {
     "use strict";
     var Strophe = converse.env.Strophe;
     var $iq = converse.env.$iq;
@@ -15,7 +14,11 @@
 
         describe("Whenever converse.js queries a server for its features", function () {
 
-            it("stores the features it receives", mock.initConverseWithAsync(function (done, _converse) {
+            it("stores the features it receives",
+                mock.initConverse(
+                    null, ['discoInitialized'], {},
+                    function (done, _converse) {
+
                 var IQ_stanzas = _converse.connection.IQ_stanzas;
                 var IQ_ids =  _converse.connection.IQ_ids;
                 test_utils.waitUntil(function () {
@@ -161,8 +164,9 @@
                                     'name': 'Music from the time of Shakespeare'
                                 });
                             _converse.connection._dataRecv(test_utils.createRequest(stanza));
-
-                            entities = _converse.disco_entities;
+                            return test_utils.waitUntil(() => _converse.disco_entities);
+                        }).then(() => {
+                            const entities = _converse.disco_entities;
                             expect(entities.length).toBe(2); // We have an extra entity, which is the user's JID
                             expect(entities.get(_converse.domain).items.length).toBe(3);
                             expect(_.includes(entities.get(_converse.domain).items.pluck('jid'), 'people.shakespeare.lit')).toBeTruthy();
@@ -179,7 +183,7 @@
 
         describe("Whenever converse.js discovers a new server feature", function () {
            it("emits the serviceDiscovered event",
-                mock.initConverseWithPromises(
+                mock.initConverse(
                     null, ['discoInitialized'], {},
                     function (done, _converse) {
 
