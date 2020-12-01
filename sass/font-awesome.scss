@@ -2,14 +2,14 @@
   font-family: 'Baumans';
   font-style: normal;
   font-weight: 400;
-  src: local('Baumans Regular'), local('Baumans-Regular'), url(webfonts/baumans.ttf) format('truetype');
+  src: local('Baumans Regular'), local('Baumans-Regular'), url('webfonts/baumans.ttf') format('truetype');
 }
 
 @font-face {
   font-family: 'Muli';
   font-style: normal;
   font-weight: 400;
-  src: local('Muli Regular'), local('Muli-Regular'), url(webfonts/muli.ttf) format('truetype');
+  src: local('Muli Regular'), local('Muli-Regular'), url('webfonts/muli.ttf') format('truetype');
 }
 
 @font-face {
@@ -44,33 +44,12 @@
   font-weight: 900;
   src: url('webfonts/fa-solid-900.eot');
   src: url('webfonts/fa-solid-900.eot?#iefix') format('embedded-opentype'),
+  url('webfonts/fa-solid-900.svg#fontawesome') format('svg'),
   url('webfonts/fa-solid-900.woff2') format('woff2'),
   url('webfonts/fa-solid-900.woff') format('woff'),
-  url('webfonts/fa-solid-900.ttf') format('truetype'),
-  url('webfonts/fa-solid-900.svg#fontawesome') format('svg');
+  url('webfonts/fa-solid-900.ttf') format('truetype');
 }
 
-.far {
-  font-family: 'ConverseFontAwesomeRegular' !important;
-  font-weight: 400;
-}
-.fa,
-.fas {
-  font-family: 'ConverseFontAwesomeSolid' !important;
-  font-weight: 900;
-}
-
-.fab {
-  font-family: 'ConverseFontAwesomeBrands';
-}
-
-.fa, .far, .fas, .fab {
-    display: inline-block;
-    font-size: inherit;
-    text-rendering: auto;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
 
 @import "@fortawesome/fontawesome-free/scss/variables";
 @import "@fortawesome/fontawesome-free/scss/mixins";
@@ -85,9 +64,38 @@
 @import "@fortawesome/fontawesome-free/scss/icons";
 @import "@fortawesome/fontawesome-free/scss/screen-reader";
 
-/* Apparent font-awesome bug? The circle has some kind of bottom margin */
-#conversejs {
-    .fa-info-circle {
-        height: 1em;
-    }
+#conversejs, .converse-website {
+  /* Apparent font-awesome bug? The circle has some kind of bottom margin */
+
+  converse-icon:before {
+    content: none !important;
+  }
+
+  .far:not(converse-icon) {
+    font-family: 'ConverseFontAwesomeRegular' !important;
+    font-weight: 400;
+  }
+  .fa:not(converse-icon),
+  .fas:not(converse-icon) {
+    font-family: 'ConverseFontAwesomeSolid' !important;
+    font-weight: 900;
+  }
+
+  .fab:not(converse-icon) {
+    font-family: 'ConverseFontAwesomeBrands';
+  }
+
+  .fa:not(converse-icon),
+  .far:not(converse-icon),
+  .fas:not(converse-icon),
+  .fab:not(converse-icon) {
+      display: inline-block;
+      font-size: inherit;
+      text-rendering: auto;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+  }
+  .fa-info-circle {
+      height: 1em;
+  }
 }

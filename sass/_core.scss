@@ -1,9 +1,9 @@
 @mixin fade-in {
     opacity: 0;  /* make things invisible upon start */
-    @include animation-name(fadein);
-    @include animation-fill-mode(forwards);
-    @include animation-duration(0.75s);
-    @include animation-timing-function(ease);
+    animation-name: fadein;
+    animation-fill-mode: forwards;
+    animation-duration: 0.75s;
+    animation-timing-function: ease;
 }
 
 body.converse-fullscreen {
@@ -16,10 +16,10 @@ body.converse-fullscreen {
         display: flex;
         justify-content: space-between;
         margin-top: 15vh;
-        @include animation-name(fadein);
-        @include animation-fill-mode(forwards);
-        @include animation-duration(5s);
-        @include animation-timing-function(ease);
+        animation-name: fadein;
+        animation-fill-mode: forwards;
+        animation-duration: 5s;
+        animation-timing-function: ease;
     }
 
     .converse-brand__padding {
@@ -100,6 +100,11 @@ body.converse-fullscreen {
         background-color: #EEE !important;
     }
 
+    .fit-content {
+        width: fit-content !important;
+        max-width: fit-content !important;
+    }
+
     .nopadding {
         padding: 0 !important;
     }
@@ -120,8 +125,19 @@ body.converse-fullscreen {
     &.converse-overlayed {
         height: 3em;
     }
+    &.converse-embedded {
+        box-sizing: border-box;
+        *, *:before, *:after {
+            box-sizing: border-box;
+        }
+        bottom: auto;
+        height: 100%; // When embedded, it fills the containing element
+        position: relative;
+        right: auto;
+        width: 100%;
+    }
 
-    .brand-heading-container {
+    converse-brand-heading {
         text-align: center;
     }
 
@@ -131,43 +147,62 @@ body.converse-fullscreen {
         align-items: flex-start;
         font-family: var(--branding-font);
         color: var(--link-color);
-        margin-bottom: 1em;
+        margin-bottom: 0.75em;
 
-        .brand-name {
-            color: var(--link-color);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-top: -0.5em;
-        }
+      .brand-name-wrapper {
+        display: flex;
+        white-space: nowrap;
+        margin: auto;
+      }
 
-        .brand-name__text {
-            font-size: 120%;
-            vertical-align: text-bottom;
-        }
+      .brand-name {
+          color: var(--link-color);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          margin-top: -0.25em;
 
-        .converse-svg-logo {
-            color: var(--link-color);
-            height: 1.5em;
-            margin-right: 0.25em;
-            margin-bottom: -0.25em;
-            .cls-1 {
-                isolation: isolate;
-            }
-            .cls-2 {
-                opacity: 0.5;
-                mix-blend-mode: multiply;
-            }
-            .cls-3 {
-                fill: var(--link-color);
-            }
-            .cls-4 {
-                fill: var(--link-color);
-            }
-        }
-    }
+          .byline {
+              font-family: var(--heading-font);
+              font-size: 0.3em;
+              margin-bottom: 0.75em;
+              margin-left: -2.7em;
+              opacity: 0.55;
+              word-spacing: 5px;
+          }
+      }
 
-    .brand-heading--inverse {
+      .brand-subtitle {
+          color: var(--text-color);
+      }
+
+      .brand-name__text {
+          font-size: 120%;
+          vertical-align: text-bottom;
+      }
+
+      .converse-svg-logo {
+          color: var(--link-color);
+          height: 1.5em;
+          margin-right: 0.25em;
+          margin-bottom: -0.25em;
+          .cls-1 {
+              isolation: isolate;
+          }
+          .cls-2 {
+              opacity: 0.5;
+              mix-blend-mode: multiply;
+          }
+          .cls-3 {
+              fill: var(--link-color);
+          }
+          .cls-4 {
+              fill: var(--link-color);
+          }
+      }
+  }
+
+  .brand-heading--inverse {
         .converse-svg-logo {
             margin-bottom: 0em;
             margin-top: -0.2em;
@@ -180,6 +215,21 @@ body.converse-fullscreen {
             margin-left: -7em;
             word-spacing: 5px;
         }
+    }
+
+    .dropdown-item {
+      padding: 0.5rem 1rem;
+      .fa {
+        width: 1.25em;
+        margin-right: 0.75rem;
+      }
+      &:active, &.selected {
+        color: white !important;
+        background-color: var(--list-item-open-color);
+        .fa {
+          color: white !important;
+        }
+      }
     }
 
     .popover {
@@ -248,7 +298,6 @@ body.converse-fullscreen {
     input[type=text], input[type=password],
     button {
         font-size: var(--font-size);
-        padding: 0.25em;
         min-height: 0;
     }
 
@@ -273,12 +322,17 @@ body.converse-fullscreen {
         margin: 0;
     }
 
+    a {
+      cursor: pointer;
+    }
+
     a, a:visited, a:not([href]):not([tabindex]) {
         text-decoration: none;
         color: var(--link-color);
         text-shadow: none;
+        cursor: pointer;
         &:hover {
-            color: var(--link-color-darken-20-percent);
+            color: var(--link-hover-color);
             text-decoration: none;
             text-shadow: none;
         }
@@ -303,18 +357,22 @@ body.converse-fullscreen {
         color: var(--gray-color);
     }
 
-    .modal {
-        background-color: rgba(0, 0, 0, 0.4);
+    q {
+      quotes: "“" "”" "‘" "’";
+      &.reason {
+        display: inline;
+      }
+    }
+    q:before {
+        content: open-quote;
+    }
+    q:after {
+        content: close-quote;
+    }
 
-        .modal-body {
-            p {
-                padding: 0.25rem 0;
-            }
-        }
-
-        .modal-footer {
-            justify-content: flex-start;
-        }
+    .helptext {
+        font-size: var(--font-size-tiny);
+        color: var(--text-color-lighten-15-percent);
     }
 
     .selected {
@@ -337,12 +395,16 @@ body.converse-fullscreen {
         .fa, .far, .fas {
             color: #fff;
             margin-right: 0.5em;
+
+            &.only-icon {
+              margin-right: 0;
+            }
         }
     }
 
     .no-text-select {
         -webkit-touch-callout: none;
-        @include user-select(none);
+        user-select: none;
     }
 
     @keyframes colorchange-chatmessage {
@@ -374,8 +436,6 @@ body.converse-fullscreen {
         75%  {background-color: rgba(255, 181, 162, 0.25);}
         100% {background-color: transparent;}
     }
-
-
     @keyframes fadein {
         0% { opacity: 0 }
         100% { opacity: 1 }
@@ -384,15 +444,14 @@ body.converse-fullscreen {
         0% { opacity: 0 }
         100% { opacity: 1 }
     }
-
     @-webkit-keyframes fadeOut {
-		 0% { opacity: 1; visibility: visible; }
-		 100% { opacity: 0; visibility: hidden;  }
-	} 
+        0% { opacity: 1; visibility: visible; }
+        100% { opacity: 0; visibility: hidden;  }
+    }
     @keyframes fadeOut {
-		 0% { opacity: 1; visibility: visible; }
-		 100% { opacity: 0; visibility: hidden;  }
-	} 
+        0% { opacity: 1; visibility: visible; }
+        100% { opacity: 0; visibility: hidden;  }
+    }
 
     .fade-in {
         @include fade-in;
@@ -400,10 +459,10 @@ body.converse-fullscreen {
 
     .visible {
         opacity:0;  /* make things invisible upon start */
-        @include animation-name(fadein);
-        @include animation-fill-mode(forwards);
-        @include animation-duration(500ms);
-        @include animation-timing-function(ease);
+        animation-name: fadein;
+        animation-fill-mode: forwards;
+        animation-duration: 500ms;
+        animation-timing-function: ease;
     }
 
     .hidden {
@@ -412,10 +471,10 @@ body.converse-fullscreen {
     }
 
     .fade-out {
-		animation-duration: 1s;
-		animation-fill-mode: forwards;  
-		animation-name: fadeOut;
-		animation-timing-function: ease-in-out;
+        animation-duration: 0.5s;
+        animation-fill-mode: forwards;
+        animation-name: fadeOut;
+        animation-timing-function: ease-in-out;
     }
 
     .collapsed {
@@ -429,21 +488,21 @@ body.converse-fullscreen {
     }
 
 
-    @include keyframes(spin) {
+    @keyframes spin  {
         from {
-            @include transform(rotate(0deg));
+            transform: rotate(0deg);
         }
         to {
-            @include transform(rotate(359deg));
+            transform: rotate(359deg);
         }
     }
 
     .spinner {
-        @include animation(spin 2s infinite, linear);
+        animation: spin 2s infinite, linear;
         width: 1em;
         display: block;
         text-align: center;
-        margin: 2em;
+        padding: 0.5em 0;
         font-size: 24px;
     }
     .left {
@@ -458,6 +517,7 @@ body.converse-fullscreen {
         margin: auto;
     }
     .hor_centered {
+        width: 100%;
         text-align: center;
         display: block;
         margin: 0 auto;
@@ -465,7 +525,7 @@ body.converse-fullscreen {
     }
 
     .error {
-        color: var(--error-color);
+        color: var(--error-color) !important;
     }
     .info {
         color: var(--info-color);
@@ -488,8 +548,22 @@ body.converse-fullscreen {
         background-color: var(--avatar-background-color);
     }
 
+    .avatar-autocomplete {
+        margin-right: 0.5em;
+        vertical-align: middle;
+    }
+
     .activated {
         display: block !important;
+    }
+
+    .form-help {
+        color: var(--subdued-color);
+        font-size: 90%;
+    }
+
+    .form-control--labeled {
+        margin-top: 0.5em;
     }
 
     .nav-pills .nav-link.active,
@@ -504,23 +578,41 @@ body.converse-fullscreen {
 
     .badge {
         text-shadow: none;
+        color: white;
     }
 
-    .badge {
-        color: white;
+    .badge-light {
+        color: var(--text-color);
     }
 
     .btn-primary, .button-primary, .badge-primary {
         background-color: var(--primary-color);
         border-color: transparent;
-        &:hover {
-            background-color: var(--primary-color-dark);
-            border-color: transparent;
-        }
-        &.active {
+        &:focus, &:hover, &:active {
             background-color: var(--primary-color-dark) !important;
             border-color: transparent !important;
         }
+    }
+
+    .btn--transparent {
+        background: transparent;
+        border: none;
+    }
+
+    .btn-circle {
+        width: 30px;
+        height: 30px;
+        text-align: center;
+        padding: 0.5em 0;
+        font-size: var(--font-size-small);
+        line-height: 1.428571429;
+        border-radius: 50%;
+    }
+
+    .btn {
+      &.fa {
+        color: white !important;
+      }
     }
 
     .badge-groupchat {

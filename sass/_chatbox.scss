@@ -3,7 +3,6 @@
         display: none;
     }
     .flyout {
-        border-radius: var(--chatbox-border-radius);
         position: absolute;
 
         @media screen and (max-height: $mobile-landscape-height) {
@@ -37,11 +36,12 @@
     }
 
     .chat-head {
-        flex-wrap: nowrap;
+        display: flex;
+        flex-direction: row;
         color: #ffffff;
         font-size: 100%;
         margin: 0;
-        padding: 0.5em;
+        padding: 0;
         position: relative;
 
         &.chat-head-chatbox {
@@ -49,31 +49,48 @@
         }
 
         .avatar {
-            height: 36px;
-            width: 36px;
             margin-right: 0.5em;
         }
 
-        .chatbox-title {
-            .chatroom-description {
-                font-size: 80%;
-            }
-        }
-        .chatbox-buttons {
-            flex-direction: row-reverse;
-            @include make-col-ready();
-            @include make-col(3);
-            padding: 0;
+        .chat-head__desc {
+            color: var(--chat-head-color-lighten-50-percent);
+            font-size: var(--font-size-small);
+            margin: 0;
+            overflow: hidden;
+            padding: 0.5rem 1rem 0.5rem 1rem;
+            text-overflow: ellipsis;
+            width: 100%;
+            max-height: 5em;
         }
 
-        .user-custom-message {
-            color: var(--chat-head-color-lighten-50-percent);
-            font-size: 75%;
+        .chatbox-title {
+            padding: 0.75rem 1rem 0 1rem;
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            width: 100%;
+        }
+
+        .chatbox-title--no-desc {
+            padding: 0.75rem 1rem;
+        }
+
+        .chatbox-title--row {
+            display: flex;
+            flex-direction: row;
+            overflow: hidden;
+        }
+
+        .chatbox-title__text {
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
-            margin: 0;
-            padding-top: 0.2em;
+        }
+
+        .chatbox-title__buttons {
+            display: flex;
+            flex-direction: row-reverse;
+            flex-wrap: nowrap;
+            padding: 0;
         }
 
         a, a:visited, a:hover, a:not([href]):not([tabindex]) {
@@ -112,15 +129,6 @@
         text-align: left;
         margin: 0 var(--chat-gutter);
 
-        img {
-            &.emoji {
-                height: 1.2em;
-                width: 1.2em;
-                margin: 0 .05em 0 .1em;
-                vertical-align: -0.1em;
-            }
-        }
-
         @media screen and (max-height: $mobile-landscape-height) {
             margin: 0;
             width: var(--mobile-chat-width);
@@ -134,21 +142,20 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            background-color: var(--chat-head-color);
             box-shadow: 1px 3px 5px 3px rgba(0, 0, 0, 0.4);
-            z-index: 1;
-            overflow-y: hidden;
+            z-index: 2;
+            overflow: hidden;
             width: 100%;
 
             @media screen and (max-height: $mobile-landscape-height) {
                 height: var(--mobile-chat-height);
                 width: var(--mobile-chat-width);
-                height: 100vh;
+                height: var(--fullpage-chat-height);
             }
             @media screen and (max-width: $mobile-portrait-length) {
                 height: var(--mobile-chat-height);
                 width: var(--mobile-chat-width);
-                height: 100vh;
+                height: var(--fullpage-chat-height);
             }
         }
         .chat-title {
@@ -172,7 +179,6 @@
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            height: 100%;
             background-color: var(--chat-head-color);
             border-bottom-left-radius: var(--chatbox-border-radius);
             border-bottom-right-radius: var(--chatbox-border-radius);
@@ -207,13 +213,74 @@
             margin-bottom: 0.25em;
         }
         .chat-content {
-            height: 100%;
-            font-size: var(--message-font-size);
-            color: var(--text-color);
-            overflow-y: auto;
+            background-color: var(--chat-content-background-color);
             border: 0;
-            background-color: #ffffff;
+            color: var(--text-color);
+            font-size: var(--message-font-size);
+            height: 100%;
             line-height: 1.3em;
+            overflow: hidden;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+
+            converse-chat-content {
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+                justify-content: space-between;
+            }
+
+            converse-chat-message {
+                .spinner {
+                    width: 100%;
+                    overflow-y: hidden;
+                }
+            }
+
+            .chat-content__help {
+                border-top: 1px solid var(--chat-head-color);
+                max-height: 100%;
+                .close-chat-help {
+                    svg {
+                        fill: var(--chat-head-color);
+                    }
+                }
+
+                converse-chat-help {
+                    height: 100%;
+                    overflow-y: auto;
+                    display: block;
+                    padding: 0.5em 0;
+                }
+                .close-chat-help {
+                    float: right;
+                    padding-right: 1em;
+                    cursor: pointer;
+                    color: var(--chat-content-background-color);
+                }
+            }
+
+            .chat-content__messages {
+                overflow-x: hidden;
+                overflow-y: auto;
+                height: 100%;
+            }
+
+            .chat-content__notifications {
+                height: 1.7em;
+                white-space: pre;
+                background-color: var(--chat-content-background-color);
+                color: var(--subdued-color);
+                font-size: 90%;
+                font-style: italic;
+                line-height: var(--line-height-small);
+                padding: 0 1em 0.3em;
+                &:before {
+                    content: " ";
+                }
+            }
 
             video {
                 width: 100%
@@ -223,6 +290,7 @@
                 width: 100%
             }
         }
+
         .chat-content-sendbutton {
             height: calc(100% - (var(--chat-textarea-height) + var(--send-button-height) + 2 * var(--send-button-margin)));
         }
@@ -262,184 +330,32 @@
                 width: 100%;
             }
 
-            .chat-textarea {
-                color: var(--chat-textarea-color);
-                background-color: var(--chat-textarea-background-color);
-                border-top-left-radius: 0;
-                border-top-right-radius: 0;
-                border-bottom-radius: var(--chatbox-border-radius);
-                padding: 0.5em;
-                width: 100%;
-                border: none;
-                min-height: var(--chat-textarea-height);
-                margin-bottom: -4px; // Not clear why this is necessar :(
-                resize: none;
+            .chat-textarea, input {
                 &:active, &:focus{
                     outline-color: var(--chat-head-color);
-                }
-                &.spoiler {
-                    height: 42px;
                 }
                 &.correcting {
                     background-color: var(--chat-correcting-color);
                 }
             }
 
-            .send-button {
-                position: static;
-                left: var(--send-button-margin);
+            .chat-textarea {
+                color: var(--chat-textarea-color);
+                background-color: var(--chat-textarea-background-color);
+                border-top-left-radius: 0;
+                border-top-right-radius: 0;
+                border-bottom-radius: var(--chatbox-border-radius);
+                padding-left: 0.5em;
+                padding-right: 4.5em;
+                padding-top: 0.5em;
+                padding-bottom:0.5em;
                 width: 100%;
-                background-color: var(--chat-head-color);
-                color: var(--inverse-link-color);
-                font-size: 80%;
-                height: var(--send-button-height);
-                bottom: calc(-var(--send-button-height) - var(--send-button-margin));
-
-            }
-            .chat-toolbar {
-                box-sizing: border-box;
-                margin: 0;
-                padding: 0.25em;
-                display: block;
-                border-top: 4px solid var(--chat-head-color);
-                background-color: white;
-                color: var(--chat-head-color);
-                .fa, .fa:hover,
-                .far, .far:hover,
-                .fas, .fas:hover {
-                    color: var(--chat-head-color);
-                    font-size: var(--font-size-large);
-                }
-                .disabled {
-                    color: var(--text-color-lighten-15-percent) !important;
-                }
-                .unencrypted a,
-                .unencrypted {
-                    color: var(--text-color);
-                    .toolbar-menu {
-                        a {
-                            color: var(--link-color);
-                        }
-                    }
-                }
-                .unverified a,
-                .unverified {
-                    color: #cf5300;
-                }
-                .private a,
-                .private {
-                    color: #4b7003;
-                }
-                .toggle-occupants {
-                    float: right;
-                }
-                li {
-                    cursor: pointer;
-                    display: inline-block;
-                    list-style: none;
-                    padding: 0 0.5em;
-                    &:hover {
-                        cursor: pointer;
-                    }
-                    .toolbar-menu {
-                        background-color: #fff;
-                        bottom: 2rem;
-                        box-shadow: -1px -1px 2px 0 rgba(0, 0, 0, 0.4);
-                        height: auto;
-                        margin-bottom: 0;
-                        min-width: 21rem;
-                        position: absolute;
-                        right: 0;
-                        top: auto;
-                        z-index: $zindex-dropdown;
-
-                        &.otr-menu {
-                            left: -6em;
-                            min-width: 15rem;
-
-                            &.show {
-                                display: flex;
-                                flex-direction: column;
-                            }
-                        }
-
-                        a {
-                            color: var(--link-color);
-                        }
-                        .emoji-picker-container {
-                            background: white;
-                        }
-                        ul {
-                            &.emoji-picker {
-                                overflow-y: scroll;
-                                overflow-x: hidden;
-                                padding: 0.5em;
-                            }
-                            li {
-                                margin-left: 0;
-                                cursor: pointer;
-                                list-style: none;
-                                position: relative;
-                                &.insert-emoji {
-                                    padding: 0.2em;
-                                    &.picked {
-                                        background-color: var(--highlight-color);
-                                    }
-                                    &:hover {
-                                        background-color: var(--highlight-color);
-                                    }
-                                    a {
-                                        font-size: var(--font-size-huge);
-                                        &:hover {
-                                            color: #8f2831;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    &.toggle-smiley {
-                        a.toggle-smiley {
-                            padding: 0;
-                        }
-                        .emoji-toolbar {
-                            box-shadow: 0 -1px 1px 0 rgba(0, 0, 0, 0.4);
-                            .emoji-category-picker {
-                                padding-top: 0.5em;
-                                ul {
-                                    display: flex;
-                                    flex-direction: row;
-                                    justify-content: space-between;
-                                }
-                            }
-
-                            .emoji-category-picker,
-                            .emoji-skintone-picker {
-                                li {
-                                    padding: 0.25em;
-                                    font-size: var(--font-size-huge);
-                                    &:hover {
-                                        background-color: var(--highlight-color);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    &.toggle-otr {
-                        ul {
-                            z-index: 99;
-                            li {
-                                &:hover {
-                                    background-color: var(--highlight-color);
-                                }
-                                display: block;
-                                padding: 7px;
-                                a {
-                                    display: block;
-                                }
-                            }
-                        }
-                    }
+                border: none;
+                min-height: var(--chat-textarea-height);
+                margin-bottom: -4px; // Not clear why this is necessar :(
+                resize: none;
+                &.spoiler {
+                    height: 42px;
                 }
             }
         }
@@ -455,7 +371,8 @@
                 height: 5px;
                 width: 100%;
             }
-            &-left {
+            &-left,
+            &-occupants-left {
                 cursor: w-resize;
                 width: 5px;
                 height: 100%;
@@ -474,15 +391,29 @@
 
 /* ******************* Overlay and embedded styles *************************** */
 
-#conversejs.converse-embedded {
-    .chat-textarea {
-        max-height: var(--fullpage-max-chat-textarea-height);
+#conversejs.converse-embedded,
+#conversejs.converse-overlayed {
+    .controlbox-head {
+        padding: 0.5em;
+    }
+    .chat-head {
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+    }
+    .chatbox {
+        min-width: var(--overlayed-chat-width) !important;
+        width: var(--overlayed-chat-width);
+
+        .box-flyout {
+            min-width: var(--overlayed-chat-width) !important;
+            width: var(--overlayed-chat-width);
+        }
     }
 }
 
-#conversejs.converse-embedded,
-#conversejs.converse-overlayed {
-    .chat-head {
+#conversejs.converse-overlayed  {
+
+    .chat-head, .box-flyout {
         border-top-left-radius: var(--chatbox-border-radius);
         border-top-right-radius: var(--chatbox-border-radius);
         @media screen and (max-height: $mobile-landscape-height) {
@@ -493,34 +424,8 @@
             border-top-left-radius: 0;
             border-top-right-radius: 0;
         }
-        .chatbox-title {
-            @include make-col(8);
-        }
-        .chatbox-buttons {
-            @include make-col(4);
-        }
     }
 
-    .emoji-picker {
-        height: var(--embedded-emoji-picker-height);
-    }
-    
-    .chatbox {
-        min-width: var(--overlayed-chat-width) !important;
-        width: var(--overlayed-chat-width);
-
-        .box-flyout {
-            min-width: var(--overlayed-chat-width) !important;
-            width: var(--overlayed-chat-width);
-
-            .chat-body {
-                height: calc(100% - var(--overlayed-chat-head-height));
-            }
-        }
-    }
-}
-
-#conversejs.converse-overlayed  {
     .flyout {
         bottom: var(--overlayed-chatbox-hover-height);
     }
@@ -529,98 +434,59 @@
         min-height: calc(var(--overlayed-chat-height) / 2);
     }
     .chat-head {
-        height: var(--overlayed-chat-head-height);
+        min-height: var(--overlayed-chat-head-height);
+    }
+    .minimized-chats-flyout .chat-head {
+        cursor: default;
     }
     .chat-textarea {
         max-height: var(--overlayed-max-chat-textarea-height);
     }
-    .emoji-picker {
-        height: var(--overlayed-emoji-picker-height);
-    }
     .chatbox {
-        .sendXMPPMessage {
-            .chat-toolbar {
-                li {
-                    .toolbar-menu {
-                        min-width: 235px;
-                        ul {
-                            &.emoji-toolbar {
-                                width: 100%;
-                                .emoji-category {
-                                    float: left;
-                                }
-                            }
-                        }
-                    }
-                    &.toggle-smiley {
-                        .emoji-toolbar {
-                            .emoji-category-picker {
-                                ul {
-                                    flex-wrap: wrap;
-                                    justify-content: flex-start;
-                                }
-                            }
-                        }
-                    }
-                }
+        .chat-body {
+            height: calc(100% - var(--overlayed-chat-head-height));
+        }
+        .chatbox-title {
+            padding: 0.5rem 0.75rem 0 0.75rem;
+        }
+        .chatbox-title--no-desc {
+            padding: 0.5rem 0.75rem;
+        }
+        converse-dropdown {
+            .btn--standalone {
+                padding: 0 0.2em;
+                margin: 0 0 0 0.5em;
             }
         }
     }
 }
 
 @include media-breakpoint-down(sm) {
-	#conversejs.converse-overlayed {
-		> .row {
-			flex-direction: column;
-
+    #conversejs.converse-overlayed {
+        > .row {
+            flex-direction: column;
             &.no-gutters {
                 margin: -1em;
             }
-		}
-	}
+        }
+    }
 }
 
-/* ******************* Fullpage styles *************************** */
 
+#conversejs.converse-embedded,
 #conversejs.converse-fullscreen  {
     .flyout {
         border-radius: 0;
-        border-top: 0.8em solid var(--chat-head-color);
-        border: var(--flyout-padding) solid var(--chat-head-color);
+        border:none;
         bottom: 0;
-    }
-    .chatbox-btn {
-        font-size: var(--fullpage-chatbox-button-size);
-        margin: 0 0.3em;
-    }
-    .chat-head {
-        height: var(--fullpage-chat-head-height);
-        font-size: var(--font-size-huge);
-        padding: 0;
-        .user-custom-message {
-            font-size: 70%;
-            height: auto;
-            line-height: var(--line-height);
-        }
-        .chatbox-title {
-            @include make-col(10);
-        }
-        .chatbox-buttons {
-            @include make-col(2);
-        }
-    }
-    .chat-textarea {
-        max-height: var(--fullpage-max-chat-textarea-height);
-    }
-    .emoji-picker {
-        height: var(--fullpage-emoji-picker-height);
     }
 
     .chatbox {
-        width: 100%;
-        height: 100%;
         margin: 0;
-
+        .box-flyout {
+            box-shadow: none;
+            overflow: hidden;
+        }
         @include make-col-ready();
         @include media-breakpoint-up(md) {
             @include make-col(8);
@@ -631,9 +497,75 @@
         @include media-breakpoint-up(xl) {
             @include make-col(10);
         }
+    }
 
+    &.converse-singleton {
+        .flyout {
+            border: none !important;
+        }
+        .chat-head {
+            padding: 0.5em;
+        }
+        .chatbox {
+            margin: 0;
+            @include make-col-ready();
+            @include media-breakpoint-up(md) {
+                @include make-col(12);
+            }
+            @include media-breakpoint-up(lg) {
+                @include make-col(12);
+            }
+            @include media-breakpoint-up(xl) {
+                @include make-col(12);
+            }
+        }
+    }
+}
+
+#conversejs.converse-embedded {
+    .chat-head {
+        font-size: var(--font-size-huge);
+    }
+
+    .converse-chatboxes {
+        z-index: 1031; // One more than bootstrap navbar
+        position: inherit;
+        flex-wrap: nowrap;
+        bottom: auto;
+        height: 100%;
+        width: 100%;
+        margin-left: -15px;
+    }
+
+    .chatbox {
         .box-flyout {
-            background-color: var(--chat-head-color);
+            bottom: 0;
+            height: 100%;
+            min-width: auto;
+            width: 100%;
+        }
+    }
+
+    .chat-textarea {
+        max-height: var(--fullpage-max-chat-textarea-height);
+    }
+}
+
+/* ******************* Fullpage styles *************************** */
+
+#conversejs.converse-fullscreen  {
+    .chatbox-btn {
+        font-size: var(--fullpage-chatbox-button-size);
+        margin: 0 0.3em;
+    }
+    .chat-head {
+        font-size: var(--font-size-huge);
+    }
+    .chat-textarea {
+        max-height: var(--fullpage-max-chat-textarea-height);
+    }
+    .chatbox {
+        .box-flyout {
             box-shadow: none;
             height: var(--fullpage-chat-height);
             min-height: calc(var(--fullpage-chat-height) / 2);
@@ -641,14 +573,9 @@
             overflow: hidden;
         }
         .chat-body {
-            height: calc(100% - var(--fullpage-chat-head-height));
+            height: inherit;
+            overflow: hidden;
             background-color: var(--chat-head-color);
-            border-top-left-radius: var(--chatbox-border-radius);
-            border-top-right-radius: var(--chatbox-border-radius);
-        }
-        .chat-content {
-            border-top-left-radius: var(--chatbox-border-radius);
-            border-top-right-radius: var(--chatbox-border-radius);
         }
         .chat-title {
             font-size: var(--font-size-huge);
@@ -657,19 +584,6 @@
         .sendXMPPMessage {
             ul {
                 width: 100%;
-            }
-            .toggle-smiley {
-                ul {
-                    &.emoji-toolbar {
-                        .emoji-category-picker {
-                            margin-right: 5em;
-                        }
-                        .emoji-category {
-                            padding-left: 10px;
-                            padding-right: 10px;
-                        }
-                    }
-                }
             }
         }
     }
@@ -691,7 +605,7 @@
                 .box-flyout {
                     left: 50px;
                     bottom: 0;
-                    height: 100vh;
+                    height: var(--fullpage-chat-height);
                     box-shadow: none;
                 }
             }
@@ -700,24 +614,18 @@
 
     #conversejs.converse-mobile,
     #conversejs.converse-overlayed,
-    #conversejs.converse-embedded,
     #conversejs.converse-fullscreen {
         .chatbox {
             .box-flyout {
                 .chatbox-navback {
+                    margin: auto 0;
+                    margin-right: 1em;
                     display: flex;
-                    @include make-col(2);
                     .fa-arrow-left {
                         &:before {
                             color: white;
                         }
                     }
-                }
-                .chatbox-title {
-                    @include make-col(7);
-                }
-                .chatbox-buttons {
-                    @include make-col(3);
                 }
             }
         }

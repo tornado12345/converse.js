@@ -1,23 +1,51 @@
-// Converse.js (A browser based XMPP chat client)
-// https://conversejs.org
-//
-// This is the utilities module.
-//
-// Copyright (c) 2013-2019, Jan-Carel Brand <jc@opkode.com>
-// Licensed under the Mozilla Public License (MPLv2)
-//
-/*global escape, Uint8Array */
-
-import Backbone from "backbone";
-import Promise from "es6-promise/dist/es6-promise.auto";
-import { Strophe } from "strophe.js";
-import _ from "../lodash.noconflict";
+/**
+ * @copyright 2020, the Converse.js contributors
+ * @license Mozilla Public License (MPLv2)
+ * @description This is the core utilities module.
+ */
+import * as strophe from 'strophe.js/src/core';
+import { Model } from '@converse/skeletor/src/model.js';
+import { compact, last, isElement, isObject } from "lodash-es";
+import log from "@converse/headless/log";
 import sizzle from "sizzle";
 
+const Strophe = strophe.default.Strophe;
+
+/**
+ * The utils object
+ * @namespace u
+ */
 const u = {};
 
+
+u.isTagEqual = function (stanza, name) {
+    if (stanza.nodeTree) {
+        return u.isTagEqual(stanza.nodeTree, name);
+    } else if (!(stanza instanceof Element)) {
+        throw Error(
+            "isTagEqual called with value which isn't "+
+            "an element or Strophe.Builder instance");
+    } else {
+        return Strophe.isTagEqual(stanza, name);
+    }
+}
+
+const parser = new DOMParser();
+const parserErrorNS = parser.parseFromString('invalid', 'text/xml')
+                            .getElementsByTagName("parsererror")[0].namespaceURI;
+
+u.getJIDFromURI = function (jid) {
+    return jid.startsWith('xmpp:') && jid.endsWith('?join')
+        ? jid.replace(/^xmpp:/, '').replace(/\?join$/, '')
+        : jid;
+}
+
 u.toStanza = function (string) {
-    return Strophe.xmlHtmlNode(string).firstElementChild;
+    const node = parser.parseFromString(string, "text/xml");
+    if (node.getElementsByTagNameNS(parserErrorNS, 'parsererror').length) {
+        throw new Error(`Parser Error: ${string}`);
+    }
+    return node.firstElementChild;
 }
 
 u.getLongestSubstring = function (string, candidates) {
@@ -49,7 +77,10 @@ u.prefixMentions = function (message) {
 };
 
 u.isValidJID = function (jid) {
-    return _.compact(jid.split('@')).length === 2 && !jid.startsWith('@') && !jid.endsWith('@');
+    if (typeof jid === 'string') {
+        return compact(jid.split('@')).length === 2 && !jid.startsWith('@') && !jid.endsWith('@');
+    }
+    return false;
 };
 
 u.isValidMUCJID = function (jid) {
@@ -57,14 +88,21 @@ u.isValidMUCJID = function (jid) {
 };
 
 u.isSameBareJID = function (jid1, jid2) {
+    if (typeof jid1 !== 'string' || typeof jid2 !== 'string') {
+        return false;
+    }
     return Strophe.getBareJidFromJid(jid1).toLowerCase() ===
             Strophe.getBareJidFromJid(jid2).toLowerCase();
 };
 
-u.getMostRecentMessage = function (model) {
-    const messages = model.messages.filter('message');
-    return messages[messages.length-1];
-}
+
+u.isSameDomain = function (jid1, jid2) {
+    if (typeof jid1 !== 'string' || typeof jid2 !== 'string') {
+        return false;
+    }
+    return Strophe.getDomainFromJid(jid1).toLowerCase() ===
+            Strophe.getDomainFromJid(jid2).toLowerCase();
+};
 
 u.isNewMessage = function (message) {
     /* Given a stanza, determine whether it's a new
@@ -75,14 +113,23 @@ u.isNewMessage = function (message) {
             sizzle(`result[xmlns="${Strophe.NS.MAM}"]`, message).length &&
             sizzle(`delay[xmlns="${Strophe.NS.DELAY}"]`, message).length
         );
-    } else if (message instanceof Backbone.Model) {
+    } else if (message instanceof Model) {
         message = message.attributes;
     }
     return !(message['is_delayed'] && message['is_archived']);
 };
 
+u.shouldCreateMessage = function (attrs) {
+    return attrs['retracted'] || // Retraction received *before* the message
+        !u.isEmptyMessage(attrs);
+}
+
+u.shouldCreateGroupchatMessage = function (attrs) {
+    return attrs.nick && (u.shouldCreateMessage(attrs) || attrs.is_tombstone);
+}
+
 u.isEmptyMessage = function (attrs) {
-    if (attrs instanceof Backbone.Model) {
+    if (attrs instanceof Model) {
         attrs = attrs.attributes;
     }
     return !attrs['oob_url'] &&
@@ -91,39 +138,74 @@ u.isEmptyMessage = function (attrs) {
         !attrs['message'];
 };
 
-u.isOnlyChatStateNotification = function (attrs) {
-    if (attrs instanceof Backbone.Model) {
-        attrs = attrs.attributes;
+//TODO: Remove
+u.isOnlyChatStateNotification = function (msg) {
+    if (msg instanceof Element) {
+        // See XEP-0085 Chat State Notification
+        return (msg.querySelector('body') === null) && (
+                    (msg.querySelector('active') !== null) ||
+                    (msg.querySelector('composing') !== null) ||
+                    (msg.querySelector('inactive') !== null) ||
+                    (msg.querySelector('paused') !== null) ||
+                    (msg.querySelector('gone') !== null));
     }
-    return attrs['chat_state'] && u.isEmptyMessage(attrs);
+    if (msg instanceof Model) {
+        msg = msg.attributes;
+    }
+    return msg['chat_state'] && u.isEmptyMessage(msg);
 };
 
-u.isHeadlineMessage = function (_converse, message) {
-    const from_jid = message.getAttribute('from');
-    if (message.getAttribute('type') === 'headline') {
-        return true;
+u.isOnlyMessageDeliveryReceipt = function (msg) {
+    if (msg instanceof Element) {
+        // See XEP-0184 Message Delivery Receipts
+        return (msg.querySelector('body') === null) &&
+                    (msg.querySelector('received') !== null);
     }
-    const chatbox = _converse.chatboxes.get(Strophe.getBareJidFromJid(from_jid));
-    if (chatbox && chatbox.get('type') === _converse.CHATROOMS_TYPE) {
+    if (msg instanceof Model) {
+        msg = msg.attributes;
+    }
+    return msg['received'] && u.isEmptyMessage(msg);
+};
+
+u.isChatRoom = function (model) {
+    return model && (model.get('type') === 'chatroom');
+}
+
+u.isErrorObject = function (o) {
+    return o instanceof Error;
+}
+
+u.isErrorStanza = function (stanza) {
+    if (!isElement(stanza)) {
         return false;
     }
-    if (message.getAttribute('type') !== 'error' &&
-            !_.isNil(from_jid) &&
-            !_.includes(from_jid, '@')) {
-        // Some servers (I'm looking at you Prosody) don't set the message
-        // type to "headline" when sending server messages. For now we
-        // check if an @ signal is included, and if not, we assume it's
-        // a headline message.
-        return true;
-    }
-    return false;
-};
+    return stanza.getAttribute('type') === 'error';
+}
 
+u.isForbiddenError = function (stanza) {
+    if (!isElement(stanza)) {
+        return false;
+    }
+    return sizzle(`error[type="auth"] forbidden[xmlns="${Strophe.NS.STANZAS}"]`, stanza).length > 0;
+}
+
+u.isServiceUnavailableError = function (stanza) {
+    if (!isElement(stanza)) {
+        return false;
+    }
+    return sizzle(`error[type="cancel"] service-unavailable[xmlns="${Strophe.NS.STANZAS}"]`, stanza).length > 0;
+}
+
+/**
+ * Merge the second object into the first one.
+ * @private
+ * @method u#merge
+ * @param { Object } first
+ * @param { Object } second
+ */
 u.merge = function merge (first, second) {
-    /* Merge the second object into the first one.
-     */
-    for (var k in second) {
-        if (_.isObject(first[k])) {
+    for (const k in second) {
+        if (isObject(first[k])) {
             merge(first[k], second[k]);
         } else {
             first[k] = second[k];
@@ -131,65 +213,39 @@ u.merge = function merge (first, second) {
     }
 };
 
-u.applyUserSettings = function applyUserSettings (context, settings, user_settings) {
-    /* Configuration settings might be nested objects. We only want to
-     * add settings which are whitelisted.
-     */
-    for (var k in settings) {
-        if (_.isUndefined(user_settings[k])) {
-            continue;
-        }
-        if (_.isObject(settings[k]) && !_.isArray(settings[k])) {
-            applyUserSettings(context[k], settings[k], user_settings[k]);
-        } else {
-            context[k] = user_settings[k];
-        }
-    }
-};
-
-u.stringToNode = function (s) {
-    /* Converts an HTML string into a DOM Node.
-     * Expects that the HTML string has only one top-level element,
-     * i.e. not multiple ones.
-     *
-     * Parameters:
-     *      (String) s - The HTML string
-     */
-    var div = document.createElement('div');
-    div.innerHTML = s;
-    return div.firstElementChild;
-};
-
 u.getOuterWidth = function (el, include_margin=false) {
-    var width = el.offsetWidth;
+    let width = el.offsetWidth;
     if (!include_margin) {
         return width;
     }
-    var style = window.getComputedStyle(el);
-    width += parseInt(style.marginLeft, 10) + parseInt(style.marginRight, 10);
+    const style = window.getComputedStyle(el);
+    width += parseInt(style.marginLeft ? style.marginLeft : 0, 10) +
+             parseInt(style.marginRight ? style.marginRight : 0, 10);
     return width;
 };
 
+/**
+ * Converts an HTML string into a DOM element.
+ * Expects that the HTML string has only one top-level element,
+ * i.e. not multiple ones.
+ * @private
+ * @method u#stringToElement
+ * @param { String } s - The HTML string
+ */
 u.stringToElement = function (s) {
-    /* Converts an HTML string into a DOM element.
-     * Expects that the HTML string has only one top-level element,
-     * i.e. not multiple ones.
-     *
-     * Parameters:
-     *      (String) s - The HTML string
-     */
     var div = document.createElement('div');
     div.innerHTML = s;
     return div.firstElementChild;
 };
 
+/**
+ * Checks whether the DOM element matches the given selector.
+ * @private
+ * @method u#matchesSelector
+ * @param { DOMElement } el - The DOM element
+ * @param { String } selector - The selector
+ */
 u.matchesSelector = function (el, selector) {
-    /* Checks whether the DOM element matches the given selector.
-     *
-     * Parameters:
-     *      (DOMElement) el - The DOM element
-     *      (String) selector - The selector
-     */
     const match = (
         el.matches ||
         el.matchesSelector ||
@@ -201,28 +257,24 @@ u.matchesSelector = function (el, selector) {
     return match ? match.call(el, selector) : false;
 };
 
+/**
+ * Returns a list of children of the DOM element that match the selector.
+ * @private
+ * @method u#queryChildren
+ * @param { DOMElement } el - the DOM element
+ * @param { String } selector - the selector they should be matched against
+ */
 u.queryChildren = function (el, selector) {
-    /* Returns a list of children of the DOM element that match the
-     * selector.
-     *
-     *  Parameters:
-     *      (DOMElement) el - the DOM element
-     *      (String) selector - the selector they should be matched
-     *          against.
-     */
-    return _.filter(el.childNodes, _.partial(u.matchesSelector, _, selector));
+    return Array.from(el.childNodes).filter(el => u.matchesSelector(el, selector));
 };
 
 u.contains = function (attr, query) {
+    const checker = (item, key) => item.get(key).toLowerCase().includes(query.toLowerCase());
     return function (item) {
         if (typeof attr === 'object') {
-            var value = false;
-            _.forEach(attr, function (a) {
-                value = value || _.includes(item.get(a).toLowerCase(), query.toLowerCase());
-            });
-            return value;
+            return Object.keys(attr).reduce((acc, k) => acc || checker(item, k), false);
         } else if (typeof attr === 'string') {
-            return _.includes(item.get(attr).toLowerCase(), query.toLowerCase());
+            return checker(item, attr);
         } else {
             throw new TypeError('contains: wrong attribute type. Must be string or array.');
         }
@@ -275,16 +327,36 @@ u.isPersistableModel = function (model) {
     return model.collection && model.collection.browserStorage;
 };
 
+/**
+ * Returns a promise object on which `resolve` or `reject` can be called.
+ * @private
+ * @method u#getResolveablePromise
+ */
 u.getResolveablePromise = function () {
-    /* Returns a promise object on which `resolve` or `reject` can be
-     * called.
-     */
-    const wrapper = {};
+    const wrapper = {
+        isResolved: false,
+        isPending: true,
+        isRejected: false
+    };
     const promise = new Promise((resolve, reject) => {
         wrapper.resolve = resolve;
         wrapper.reject = reject;
     })
-    _.assign(promise, wrapper);
+    Object.assign(promise, wrapper);
+    promise.then(
+        function (v) {
+            promise.isResolved = true;
+            promise.isPending = false;
+            promise.isRejected = false;
+            return v;
+        },
+        function (e) {
+            promise.isResolved = false;
+            promise.isPending = false;
+            promise.isRejected = true;
+            throw (e);
+        }
+    );
     return promise;
 };
 
@@ -296,16 +368,16 @@ u.interpolate = function (string, o) {
         });
 };
 
+/**
+ * Call the callback once all the events have been triggered
+ * @private
+ * @method u#onMultipleEvents
+ * @param { Array } events: An array of objects, with keys `object` and
+ *   `event`, representing the event name and the object it's triggered upon.
+ * @param { Function } callback: The function to call once all events have
+ *    been triggered.
+ */
 u.onMultipleEvents = function (events=[], callback) {
-    /* Call the callback once all the events have been triggered
-     *
-     * Parameters:
-     *  (Array) events: An array of objects, with keys `object` and
-     *      `event`, representing the event name and the object it's
-     *      triggered upon.
-     *  (Function) callback: The function to call once all events have
-     *      been triggered.
-     */
     let triggered = [];
 
     function handler (result) {
@@ -315,14 +387,14 @@ u.onMultipleEvents = function (events=[], callback) {
             triggered = [];
         }
     }
-    _.each(events, (map) => map.object.on(map.event, handler));
+    events.forEach(e => e.object.on(e.event, handler));
 };
 
-u.safeSave = function (model, attributes) {
+u.safeSave = function (model, attributes, options) {
     if (u.isPersistableModel(model)) {
-        model.save(attributes);
+        model.save(attributes, options);
     } else {
-        model.set(attributes);
+        model.set(attributes, options);
     }
 };
 
@@ -332,35 +404,43 @@ u.siblingIndex = function (el) {
     return i;
 };
 
-u.getCurrentWord = function (input, index) {
+/**
+ * Returns the current word being written in the input element
+ * @method u#getCurrentWord
+ * @param {HTMLElement} input - The HTMLElement in which text is being entered
+ * @param {integer} [index] - An optional rightmost boundary index. If given, the text
+ *  value of the input element will only be considered up until this index.
+ * @param {string} [delineator] - An optional string delineator to
+ *  differentiate between words.
+ * @private
+ */
+u.getCurrentWord = function (input, index, delineator) {
     if (!index) {
         index = input.selectionEnd || undefined;
     }
-    return _.last(input.value.slice(0, index).split(' '));
+    let [word] = input.value.slice(0, index).split(/\s/).slice(-1);
+    if (delineator) {
+        [word] = word.split(delineator).slice(-1);
+    }
+    return word;
 };
 
+u.isMentionBoundary = (s) => s !== '@' && RegExp(`(\\p{Z}|\\p{P})`, 'u').test(s);
+
 u.replaceCurrentWord = function (input, new_value) {
-    const cursor = input.selectionEnd || undefined,
-          current_word = _.last(input.value.slice(0, cursor).split(' ')),
-          value = input.value;
-    input.value = value.slice(0, cursor - current_word.length) + `${new_value} ` + value.slice(cursor);
-    input.selectionEnd = cursor - current_word.length + new_value.length + 1;
+    const caret = input.selectionEnd || undefined;
+    const current_word = last(input.value.slice(0, caret).split(/\s/));
+    const value = input.value;
+    const mention_boundary = u.isMentionBoundary(current_word[0]) ? current_word[0] : '';
+    input.value = value.slice(0, caret - current_word.length) + mention_boundary + `${new_value} ` + value.slice(caret);
+    const selection_end = caret - current_word.length + new_value.length + 1;
+    input.selectionEnd = mention_boundary ? selection_end + 1 : selection_end;
 };
 
 u.triggerEvent = function (el, name, type="Event", bubbles=true, cancelable=true) {
     const evt = document.createEvent(type);
     evt.initEvent(name, bubbles, cancelable);
     el.dispatchEvent(evt);
-};
-
-u.geoUriToHttp = function(text, geouri_replacement) {
-    const regex = /geo:([\-0-9.]+),([\-0-9.]+)(?:,([\-0-9.]+))?(?:\?(.*))?/g;
-    return text.replace(regex, geouri_replacement);
-};
-
-u.httpToGeoUri = function(text, _converse) {
-    const replacement = 'geo:$1,$2';
-    return text.replace(_converse.geouri_regex, replacement);
 };
 
 u.getSelectValues = function (select) {
@@ -377,7 +457,6 @@ u.getSelectValues = function (select) {
 
 u.formatFingerprint = function (fp) {
     fp = fp.replace(/^05/, '');
-    const arr = [];
     for (let i=1; i<8; i++) {
         const idx = i*8+i-1;
         fp = fp.slice(0, idx) + ' ' + fp.slice(idx);
@@ -425,7 +504,7 @@ u.getRandomInt = function (max) {
     return Math.floor(Math.random() * Math.floor(max));
 };
 
-u.putCurserAtEnd = function (textarea) {
+u.placeCaretAtEnd = function (textarea) {
     if (textarea !== document.activeElement) {
         textarea.focus();
     }
@@ -438,12 +517,88 @@ u.putCurserAtEnd = function (textarea) {
     this.scrollTop = 999999;
 };
 
-u.getUniqueId = function () {
-    return 'xxxxxxxx-xxxx'.replace(/[x]/g, function(c) {
-        var r = Math.random() * 16 | 0,
-            v = c === 'x' ? r : r & 0x3 | 0x8;
+u.getUniqueId = function (suffix) {
+    const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : r & 0x3 | 0x8;
         return v.toString(16);
     });
+    if (typeof(suffix) === "string" || typeof(suffix) === "number") {
+        return uuid + ":" + suffix;
+    } else {
+        return uuid;
+    }
+}
+
+
+/**
+ * Clears the specified timeout and interval.
+ * @method u#clearTimers
+ * @param {number} timeout - Id if the timeout to clear.
+ * @param {number} interval - Id of the interval to clear.
+ * @private
+ * @copyright Simen Bekkhus 2016
+ * @license MIT
+ */
+function clearTimers(timeout, interval) {
+    clearTimeout(timeout);
+    clearInterval(interval);
+}
+
+
+/**
+ * Creates a {@link Promise} that resolves if the passed in function returns a truthy value.
+ * Rejects if it throws or does not return truthy within the given max_wait.
+ * @method u#waitUntil
+ * @param {Function} func - The function called every check_delay,
+ *  and the result of which is the resolved value of the promise.
+ * @param {number} [max_wait=300] - The time to wait before rejecting the promise.
+ * @param {number} [check_delay=3] - The time to wait before each invocation of {func}.
+ * @returns {Promise} A promise resolved with the value of func,
+ *  or rejected with the exception thrown by it or it times out.
+ * @copyright Simen Bekkhus 2016
+ * @license MIT
+ */
+u.waitUntil = function (func, max_wait=300, check_delay=3) {
+    // Run the function once without setting up any listeners in case it's already true
+    try {
+        const result = func();
+        if (result) {
+            return Promise.resolve(result);
+        }
+    } catch (e) {
+        return Promise.reject(e);
+    }
+
+    const promise = u.getResolveablePromise();
+    const timeout_err = new Error();
+
+    function checker () {
+        try {
+            const result = func();
+            if (result) {
+                clearTimers(max_wait_timeout, interval);
+                promise.resolve(result);
+            }
+        } catch (e) {
+            clearTimers(max_wait_timeout, interval);
+            promise.reject(e);
+        }
+    }
+
+    const interval = setInterval(checker, check_delay);
+
+    function handler () {
+        clearTimers(max_wait_timeout, interval);
+        const err_msg = `Wait until promise timed out: \n\n${timeout_err.stack}`;
+        console.trace();
+        log.error(err_msg);
+        promise.reject(new Error(err_msg));
+    }
+
+    const max_wait_timeout = setTimeout(handler, max_wait);
+
+    return promise;
 };
 
 export default u;

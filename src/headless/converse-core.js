@@ -1,1239 +1,311 @@
-// Converse.js
-// https://conversejs.org
-//
-// Copyright (c) 2013-2019, the Converse.js developers
-// Licensed under the Mozilla Public License (MPLv2)
+/**
+ * @module converse-core
+ * @copyright The Converse.js contributors
+ * @license Mozilla Public License (MPLv2)
+ */
+import './polyfill';
+import 'strophe.js/src/websocket';
+import Storage from '@converse/skeletor/src/storage.js';
+import advancedFormat from 'dayjs/plugin/advancedFormat';
+import dayjs from 'dayjs';
+import log from '@converse/headless/log';
+import pluggable from 'pluggable.js/src/pluggable';
+import syncDriver from 'localforage-webextensionstorage-driver/sync';
+import localDriver from 'localforage-webextensionstorage-driver/local';
+import sizzle from 'sizzle';
+import stanza_utils from "@converse/headless/utils/stanza";
+import u from '@converse/headless/utils/core';
+import { Collection } from "@converse/skeletor/src/collection";
+import { Connection, MockConnection } from '@converse/headless/connection.js';
+import { CustomElement } from '../components/element';
+import { Events } from '@converse/skeletor/src/events.js';
+import { Model } from '@converse/skeletor/src/model.js';
+import { Router } from '@converse/skeletor/src/router.js';
+import { Strophe, $build, $iq, $msg, $pres } from 'strophe.js/src/strophe';
+import { assignIn, debounce, invoke, isFunction, isObject, pick } from 'lodash-es';
+import { html } from 'lit-element';
+import { sprintf } from 'sprintf-js';
 
-import { $build, $iq, $msg, $pres, SHA1, Strophe } from "strophe.js";
-import Backbone from "backbone";
-import BrowserStorage from "backbone.browserStorage";
-import Promise from "es6-promise/dist/es6-promise.auto";
-import _ from "./lodash.noconflict";
-import f from "./lodash.fp";
-import i18n from "./i18n";
-import moment from "moment";
-import pluggable from "pluggable.js/dist/pluggable";
-import polyfill from "./polyfill";
-import sizzle from "sizzle";
-import u from "@converse/headless/utils/core";
 
-Backbone = Backbone.noConflict();
-
-// Strophe globals
-const b64_sha1 = SHA1.b64_sha1;
+dayjs.extend(advancedFormat);
 
 // Add Strophe Namespaces
 Strophe.addNamespace('CARBONS', 'urn:xmpp:carbons:2');
 Strophe.addNamespace('CHATSTATES', 'http://jabber.org/protocol/chatstates');
 Strophe.addNamespace('CSI', 'urn:xmpp:csi:0');
 Strophe.addNamespace('DELAY', 'urn:xmpp:delay');
+Strophe.addNamespace('FASTEN', 'urn:xmpp:fasten:0');
 Strophe.addNamespace('FORWARD', 'urn:xmpp:forward:0');
 Strophe.addNamespace('HINTS', 'urn:xmpp:hints');
 Strophe.addNamespace('HTTPUPLOAD', 'urn:xmpp:http:upload:0');
 Strophe.addNamespace('IDLE', 'urn:xmpp:idle:1');
 Strophe.addNamespace('MAM', 'urn:xmpp:mam:2');
+Strophe.addNamespace('MODERATE', 'urn:xmpp:message-moderate:0');
 Strophe.addNamespace('NICK', 'http://jabber.org/protocol/nick');
-Strophe.addNamespace('OMEMO', "eu.siacs.conversations.axolotl");
+Strophe.addNamespace('OMEMO', 'eu.siacs.conversations.axolotl');
 Strophe.addNamespace('OUTOFBAND', 'jabber:x:oob');
 Strophe.addNamespace('PUBSUB', 'http://jabber.org/protocol/pubsub');
 Strophe.addNamespace('REGISTER', 'jabber:iq:register');
+Strophe.addNamespace('RETRACT', 'urn:xmpp:message-retract:0');
 Strophe.addNamespace('ROSTERX', 'http://jabber.org/protocol/rosterx');
 Strophe.addNamespace('RSM', 'http://jabber.org/protocol/rsm');
 Strophe.addNamespace('SID', 'urn:xmpp:sid:0');
 Strophe.addNamespace('SPOILER', 'urn:xmpp:spoiler:0');
+Strophe.addNamespace('STANZAS', 'urn:ietf:params:xml:ns:xmpp-stanzas');
+Strophe.addNamespace('STYLING', 'urn:xmpp:styling:0');
 Strophe.addNamespace('VCARD', 'vcard-temp');
 Strophe.addNamespace('VCARDUPDATE', 'vcard-temp:x:update');
 Strophe.addNamespace('XFORM', 'jabber:x:data');
 
-// Use Mustache style syntax for variable interpolation
-/* Configuration of Lodash templates (this config is distinct to the
- * config of requirejs-tpl in main.js). This one is for normal inline templates.
- */
-_.templateSettings = {
-    'escape': /\{\{\{([\s\S]+?)\}\}\}/g,
-    'evaluate': /\{\[([\s\S]+?)\]\}/g,
-    'interpolate': /\{\{([\s\S]+?)\}\}/g,
-    'imports': { '_': _ }
-};
-
-// Setting wait to 59 instead of 60 to avoid timing conflicts with the
-// webserver, which is often also set to 60 and might therefore sometimes
-// return a 504 error page instead of passing through to the BOSH proxy.
-const BOSH_WAIT = 59;
-
 /**
- * A private, closured object containing the private api (via `_converse.api`)
- * as well as private methods and internal data-structures.
- *
+ * Custom error for indicating timeouts
  * @namespace _converse
  */
-const _converse = {
-    'templates': {},
-    'promises': {}
-}
+class TimeoutError extends Error {}
 
-_converse.VERSION_NAME = "v4.1.2";
-
-_.extend(_converse, Backbone.Events);
-
-// Make converse pluggable
-pluggable.enable(_converse, '_converse', 'pluggable');
 
 // Core plugins are whitelisted automatically
 // These are just the @converse/headless plugins, for the full converse,
 // the other plugins are whitelisted in src/converse.js
-_converse.core_plugins = [
+const CORE_PLUGINS = [
+    'converse-adhoc',
+    'converse-bookmarks',
+    'converse-bosh',
+    'converse-caps',
+    'converse-carbons',
+    'converse-chat',
     'converse-chatboxes',
     'converse-disco',
+    'converse-emoji',
+    'converse-headlines',
     'converse-mam',
     'converse-muc',
     'converse-ping',
     'converse-pubsub',
     'converse-roster',
+    'converse-smacks',
+    'converse-status',
     'converse-vcard'
 ];
-
-_converse.keycodes = {
-    TAB: 9,
-    ENTER: 13,
-    SHIFT: 16,
-    CTRL: 17,
-    ALT: 18,
-    ESCAPE: 27,
-    UP_ARROW: 38,
-    DOWN_ARROW: 40,
-    FORWARD_SLASH: 47,
-    AT: 50,
-    META: 91,
-    META_RIGHT: 93
-};
-
-
-// Module-level constants
-_converse.STATUS_WEIGHTS = {
-    'offline':      6,
-    'unavailable':  5,
-    'xa':           4,
-    'away':         3,
-    'dnd':          2,
-    'chat':         1, // We currently don't differentiate between "chat" and "online"
-    'online':       1
-};
-_converse.PRETTY_CHAT_STATUS = {
-    'offline':      'Offline',
-    'unavailable':  'Unavailable',
-    'xa':           'Extended Away',
-    'away':         'Away',
-    'dnd':          'Do not disturb',
-    'chat':         'Chattty',
-    'online':       'Online'
-};
-_converse.ANONYMOUS  = "anonymous";
-_converse.CLOSED = 'closed';
-_converse.EXTERNAL = "external";
-_converse.LOGIN = "login";
-_converse.LOGOUT = "logout";
-_converse.OPENED = 'opened';
-_converse.PREBIND = "prebind";
-
-_converse.IQ_TIMEOUT = 20000;
-
-_converse.CONNECTION_STATUS = {
-    0: 'ERROR',
-    1: 'CONNECTING',
-    2: 'CONNFAIL',
-    3: 'AUTHENTICATING',
-    4: 'AUTHFAIL',
-    5: 'CONNECTED',
-    6: 'DISCONNECTED',
-    7: 'DISCONNECTING',
-    8: 'ATTACHED',
-    9: 'REDIRECT',
-   10: 'RECONNECTING',
-};
-
-_converse.SUCCESS = 'success';
-_converse.FAILURE = 'failure';
-
-// Generated from css/images/user.svg
-_converse.DEFAULT_IMAGE_TYPE = 'image/svg+xml';
-_converse.DEFAULT_IMAGE = "PD94bWwgdmVyc2lvbj0iMS4wIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCI+CiA8cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgZmlsbD0iIzU1NSIvPgogPGNpcmNsZSBjeD0iNjQiIGN5PSI0MSIgcj0iMjQiIGZpbGw9IiNmZmYiLz4KIDxwYXRoIGQ9Im0yOC41IDExMiB2LTEyIGMwLTEyIDEwLTI0IDI0LTI0IGgyMyBjMTQgMCAyNCAxMiAyNCAyNCB2MTIiIGZpbGw9IiNmZmYiLz4KPC9zdmc+Cg==";
-
-_converse.TIMEOUTS = { // Set as module attr so that we can override in tests.
-    'PAUSED':     10000,
-    'INACTIVE':   90000
-};
-
-// XEP-0085 Chat states
-// https://xmpp.org/extensions/xep-0085.html
-_converse.INACTIVE = 'inactive';
-_converse.ACTIVE = 'active';
-_converse.COMPOSING = 'composing';
-_converse.PAUSED = 'paused';
-_converse.GONE = 'gone';
-
-
-// Chat types
-_converse.PRIVATE_CHAT_TYPE = 'chatbox';
-_converse.CHATROOMS_TYPE = 'chatroom';
-_converse.HEADLINES_TYPE = 'headline';
-_converse.CONTROLBOX_TYPE = 'controlbox';
 
 
 // Default configuration values
 // ----------------------------
-_converse.default_settings = {
+const DEFAULT_SETTINGS = {
     allow_non_roster_messaging: false,
-    animate: true,
+    assets_path: '/dist',
     authentication: 'login', // Available values are "login", "prebind", "anonymous" and "external".
-    auto_away: 0, // Seconds after which user status is set to 'away'
     auto_login: false, // Currently only used in connection with anonymous login
     auto_reconnect: true,
-    auto_xa: 0, // Seconds after which user status is set to 'xa'
     blacklisted_plugins: [],
-    bosh_service_url: undefined,
+    clear_cache_on_logout: false,
     connection_options: {},
     credentials_url: null, // URL from where login credentials can be fetched
-    csi_waiting_time: 0, // Support for XEP-0352. Seconds before client is considered idle and CSI is sent out.
-    debug: false,
-    default_state: 'online',
-    expose_rid_and_sid: false,
-    geouri_regex: /https:\/\/www.openstreetmap.org\/.*#map=[0-9]+\/([\-0-9.]+)\/([\-0-9.]+)\S*/g,
+    discover_connection_methods: true,
+    geouri_regex: /https\:\/\/www.openstreetmap.org\/.*#map=[0-9]+\/([\-0-9.]+)\/([\-0-9.]+)\S*/g,
     geouri_replacement: 'https://www.openstreetmap.org/?mlat=$1&mlon=$2#map=18/$1/$2',
+    i18n: 'en',
     idle_presence_timeout: 300, // Seconds after which an idle presence is sent
     jid: undefined,
     keepalive: true,
-    locales_url: 'locale/{{{locale}}}/LC_MESSAGES/converse.json',
+    loglevel: 'info',
     locales: [
-        'af', 'ar', 'bg', 'ca', 'cs', 'de', 'eo', 'es', 'eu', 'en', 'fr', 'gl',
-        'he', 'hi', 'hu', 'id', 'it', 'ja', 'nb', 'nl',
-        'pl', 'pt_BR', 'ro', 'ru', 'tr', 'uk', 'zh_CN', 'zh_TW'
+        'af', 'ar', 'bg', 'ca', 'cs', 'de', 'eo', 'es', 'eu', 'en', 'fi', 'fr',
+        'gl', 'he', 'hi', 'hu', 'id', 'it', 'ja', 'nb', 'nl', 'mr', 'oc',
+        'pl', 'pt', 'pt_BR', 'ro', 'ru', 'tr', 'uk', 'vi', 'zh_CN', 'zh_TW'
     ],
-    message_carbons: true,
     nickname: undefined,
     password: undefined,
-    prebind_url: null,
-    priority: 0,
+    persistent_store: 'localStorage',
     rid: undefined,
     root: window.document,
     sid: undefined,
+    singleton: false,
     strict_plugin_dependencies: false,
-    trusted: true,
     view_mode: 'overlayed', // Choices are 'overlayed', 'fullscreen', 'mobile'
     websocket_url: undefined,
     whitelisted_plugins: []
 };
 
 
-_converse.log = function (message, level, style='') {
-    /* Logs messages to the browser's developer console.
+const CONNECTION_STATUS = {};
+CONNECTION_STATUS[Strophe.Status.ATTACHED] = 'ATTACHED';
+CONNECTION_STATUS[Strophe.Status.AUTHENTICATING] = 'AUTHENTICATING';
+CONNECTION_STATUS[Strophe.Status.AUTHFAIL] = 'AUTHFAIL';
+CONNECTION_STATUS[Strophe.Status.CONNECTED] = 'CONNECTED';
+CONNECTION_STATUS[Strophe.Status.CONNECTING] = 'CONNECTING';
+CONNECTION_STATUS[Strophe.Status.CONNFAIL] = 'CONNFAIL';
+CONNECTION_STATUS[Strophe.Status.DISCONNECTED] = 'DISCONNECTED';
+CONNECTION_STATUS[Strophe.Status.DISCONNECTING] = 'DISCONNECTING';
+CONNECTION_STATUS[Strophe.Status.ERROR] = 'ERROR';
+CONNECTION_STATUS[Strophe.Status.RECONNECTING] = 'RECONNECTING';
+CONNECTION_STATUS[Strophe.Status.REDIRECT] = 'REDIRECT';
+
+
+/**
+ * @namespace i18n
+ */
+export const i18n = {
+    initialize () {},
+
+    /**
+     * Overridable string wrapper method which can be used to provide i18n
+     * support.
      *
-     * Parameters:
-     *      (String) message - The message to be logged.
-     *      (Integer) level - The loglevel which allows for filtering of log
-     *                       messages.
+     * The default implementation in @converse/headless simply calls sprintf
+     * with the passed in arguments.
      *
-     *  Available loglevels are 0 for 'debug', 1 for 'info', 2 for 'warn',
-     *  3 for 'error' and 4 for 'fatal'.
-     *
-     *  When using the 'error' or 'warn' loglevels, a full stacktrace will be
-     *  logged as well.
+     * If you install the full version of Converse, then this method gets
+     * overwritten in src/i18n/index.js to return a translated string.
+     * @method __
+     * @private
+     * @memberOf i18n
+     * @param { String } str
      */
-    if (level === Strophe.LogLevel.ERROR || level === Strophe.LogLevel.FATAL) {
-        style = style || 'color: maroon';
-    }
-    if (message instanceof Error) {
-        message = message.stack;
-    } else if (_.isElement(message)) {
-        message = message.outerHTML;
-    }
-    const prefix = style ? '%c' : '';
-    const logger = _.assign({
-            'debug': _.get(console, 'log') ? console.log.bind(console) : _.noop,
-            'error': _.get(console, 'log') ? console.log.bind(console) : _.noop,
-            'info': _.get(console, 'log') ? console.log.bind(console) : _.noop,
-            'warn': _.get(console, 'log') ? console.log.bind(console) : _.noop
-        }, console);
-    if (level === Strophe.LogLevel.ERROR) {
-        logger.error(`${prefix} ERROR: ${message}`, style);
-    } else if (level === Strophe.LogLevel.WARN) {
-        if (_converse.debug) {
-            logger.warn(`${prefix} ${moment().format()} WARNING: ${message}`, style);
-        }
-    } else if (level === Strophe.LogLevel.FATAL) {
-        logger.error(`${prefix} FATAL: ${message}`, style);
-    } else if (_converse.debug) {
-        if (level === Strophe.LogLevel.DEBUG) {
-            logger.debug(`${prefix} ${moment().format()} DEBUG: ${message}`, style);
-        } else {
-            logger.info(`${prefix} ${moment().format()} INFO: ${message}`, style);
-        }
+    __ (...args) {
+        return sprintf(...args);
     }
 };
 
-Strophe.log = function (level, msg) { _converse.log(level+' '+msg, level); };
-Strophe.error = function (msg) { _converse.log(msg, Strophe.LogLevel.ERROR); };
+/**
+ * A private, closured object containing the private api (via {@link _converse.api})
+ * as well as private methods and internal data-structures.
+ * @global
+ * @namespace _converse
+ */
+export const _converse = {
+    log,
+    CONNECTION_STATUS,
+    templates: {},
+    promises: {
+        'initialized': u.getResolveablePromise()
+    },
 
+    STATUS_WEIGHTS: {
+        'offline':      6,
+        'unavailable':  5,
+        'xa':           4,
+        'away':         3,
+        'dnd':          2,
+        'chat':         1, // We currently don't differentiate between "chat" and "online"
+        'online':       1
+    },
+    ANONYMOUS: 'anonymous',
+    CLOSED: 'closed',
+    EXTERNAL: 'external',
+    LOGIN: 'login',
+    LOGOUT: 'logout',
+    OPENED: 'opened',
+    PREBIND: 'prebind',
 
-_converse.__ = function (str) {
-    /* Translate the given string based on the current locale.
+    /**
+     * @constant
+     * @type { integer }
+     */
+    STANZA_TIMEOUT: 10000,
+
+    SUCCESS: 'success',
+    FAILURE: 'failure',
+
+    // Generated from css/images/user.svg
+    DEFAULT_IMAGE_TYPE: 'image/svg+xml',
+    DEFAULT_IMAGE: "PD94bWwgdmVyc2lvbj0iMS4wIj8+CjxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCI+CiA8cmVjdCB3aWR0aD0iMTI4IiBoZWlnaHQ9IjEyOCIgZmlsbD0iIzU1NSIvPgogPGNpcmNsZSBjeD0iNjQiIGN5PSI0MSIgcj0iMjQiIGZpbGw9IiNmZmYiLz4KIDxwYXRoIGQ9Im0yOC41IDExMiB2LTEyIGMwLTEyIDEwLTI0IDI0LTI0IGgyMyBjMTQgMCAyNCAxMiAyNCAyNCB2MTIiIGZpbGw9IiNmZmYiLz4KPC9zdmc+Cg==",
+
+    TIMEOUTS: {
+        // Set as module attr so that we can override in tests.
+        PAUSED: 10000,
+        INACTIVE: 90000
+    },
+
+    // XEP-0085 Chat states
+    // https://xmpp.org/extensions/xep-0085.html
+    INACTIVE: 'inactive',
+    ACTIVE: 'active',
+    COMPOSING: 'composing',
+    PAUSED: 'paused',
+    GONE: 'gone',
+
+    // Chat types
+    PRIVATE_CHAT_TYPE: 'chatbox',
+    CHATROOMS_TYPE: 'chatroom',
+    HEADLINES_TYPE: 'headline',
+    CONTROLBOX_TYPE: 'controlbox',
+
+    default_connection_options: {'explicitResourceBinding': true},
+    router: new Router(),
+
+    TimeoutError: TimeoutError,
+
+    isTestEnv: () => {
+        return initialization_settings.bosh_service_url === 'montague.lit/http-bind';
+    },
+
+    /**
+     * Translate the given string based on the current locale.
+     * @method __
+     * @private
+     * @memberOf _converse
+     * @param { String } str
+     */
+    '__': (...args) => i18n.__(...args),
+
+    /**
+     * A no-op method which is used to signal to gettext that the passed in string
+     * should be included in the pot translation file.
      *
-     * Parameters:
-     *      (String) str - The string to translate.
-     */
-    if (_.isUndefined(i18n)) {
-        return str;
-    }
-    return i18n.translate.apply(i18n, arguments);
-}
-
-const __ = _converse.__;
-
-const PROMISES = [
-    'initialized',
-    'connectionInitialized',
-    'pluginsInitialized',
-    'statusInitialized'
-];
-
-function addPromise (promise) {
-    /* Private function, used to add a new promise to the ones already
-     * available via the `waitUntil` api method.
-     */
-    _converse.promises[promise] = u.getResolveablePromise();
-}
-
-_converse.emit = function (name) {
-    /* Event emitter and promise resolver */
-    _converse.trigger.apply(this, arguments);
-    const promise = _converse.promises[name];
-    if (!_.isUndefined(promise)) {
-        promise.resolve();
-    }
-};
-
-_converse.isUniView = function () {
-    /* We distinguish between UniView and MultiView instances.
+     * In contrast to the double-underscore method, the triple underscore method
+     * doesn't actually translate the strings.
      *
-     * UniView means that only one chat is visible, even though there might be multiple ongoing chats.
-     * MultiView means that multiple chats may be visible simultaneously.
+     * One reason for this method might be because we're using strings we cannot
+     * send to the translation function because they require variable interpolation
+     * and we don't yet have the variables at scan time.
+     *
+     * @method ___
+     * @private
+     * @memberOf _converse
+     * @param { String } str
      */
-    return _.includes(['mobile', 'fullscreen', 'embedded'], _converse.view_mode);
-}
-
-_converse.router = new Backbone.Router();
-
-
-function initPlugins() {
-    // If initialize gets called a second time (e.g. during tests), then we
-    // need to re-apply all plugins (for a new converse instance), and we
-    // therefore need to clear this array that prevents plugins from being
-    // initialized twice.
-    // If initialize is called for the first time, then this array is empty
-    // in any case.
-    _converse.pluggable.initialized_plugins = [];
-    const whitelist = _converse.core_plugins.concat(
-        _converse.whitelisted_plugins);
-
-    if (_converse.view_mode === 'embedded') {
-        _.forEach([ // eslint-disable-line lodash/prefer-map
-            "converse-bookmarks",
-            "converse-controlbox",
-            "converse-headline",
-            "converse-register"
-        ], (name) => {
-            _converse.blacklisted_plugins.push(name)
-        });
-    }
-
-    _converse.pluggable.initializePlugins({
-        'updateSettings' () {
-            _converse.log(
-                "(DEPRECATION) "+
-                "The `updateSettings` method has been deprecated. "+
-                "Please use `_converse.api.settings.update` instead.",
-                Strophe.LogLevel.WARN
-            )
-            _converse.api.settings.update.apply(_converse, arguments);
-        },
-        '_converse': _converse
-    }, whitelist, _converse.blacklisted_plugins);
-    _converse.emit('pluginsInitialized');
-}
-
-function initClientConfig () {
-    /* The client config refers to configuration of the client which is
-     * independent of any particular user.
-     * What this means is that config values need to persist across
-     * user sessions.
-     */
-    const id = 'converse.client-config';
-    _converse.config = new Backbone.Model({
-        'id': id,
-        'trusted': _converse.trusted && true || false,
-        'storage': _converse.trusted ? 'local' : 'session'
-    });
-    _converse.config.browserStorage = new Backbone.BrowserStorage.session(id);
-    _converse.config.fetch();
-    _converse.emit('clientConfigInitialized');
-}
-
-_converse.initConnection = function () {
-    /* Creates a new Strophe.Connection instance if we don't already have one.
-     */
-    if (!_converse.connection) {
-        if (!_converse.bosh_service_url && ! _converse.websocket_url) {
-            throw new Error("initConnection: you must supply a value for either the bosh_service_url or websocket_url or both.");
-        }
-        if (('WebSocket' in window || 'MozWebSocket' in window) && _converse.websocket_url) {
-            _converse.connection = new Strophe.Connection(_converse.websocket_url, _converse.connection_options);
-        } else if (_converse.bosh_service_url) {
-            _converse.connection = new Strophe.Connection(
-                _converse.bosh_service_url,
-                _.assignIn(_converse.connection_options, {'keepalive': _converse.keepalive})
-            );
-        } else {
-            throw new Error("initConnection: this browser does not support websockets and bosh_service_url wasn't specified.");
-        }
-    }
-    _converse.emit('connectionInitialized');
+    '___': str => str
 }
 
 
-function setUpXMLLogging () {
-    Strophe.log = function (level, msg) {
-        _converse.log(msg, level);
-    };
-    if (_converse.debug) {
-        _converse.connection.xmlInput = function (body) {
-            _converse.log(body.outerHTML, Strophe.LogLevel.DEBUG, 'color: darkgoldenrod');
-        };
-        _converse.connection.xmlOutput = function (body) {
-            _converse.log(body.outerHTML, Strophe.LogLevel.DEBUG, 'color: darkcyan');
-        };
-    }
+_converse.VERSION_NAME = "v7.0.3dev";
+
+Object.assign(_converse, Events);
+
+// Make converse pluggable
+pluggable.enable(_converse, '_converse', 'pluggable');
+
+
+let user_settings; // User settings, populated via api.users.settings
+let initialization_settings = {}; // Container for settings passed in via converse.initialize
+
+
+function initSettings (settings) {
+    _converse.settings = {};
+    initialization_settings = settings;
+    // Allow only whitelisted settings to be overwritten via converse.initialize
+    const allowed_settings = pick(settings, Object.keys(DEFAULT_SETTINGS));
+    assignIn(_converse.settings, DEFAULT_SETTINGS, allowed_settings);
+    assignIn(_converse, DEFAULT_SETTINGS, allowed_settings); // FIXME: remove
 }
 
 
-function finishInitialization () {
-    initClientConfig();
-    initPlugins();
-    _converse.initConnection();
-    setUpXMLLogging();
-    _converse.logIn();
-    _converse.registerGlobalEventHandlers();
-    if (!Backbone.history.started) {
-        Backbone.history.start();
+function initUserSettings () {
+    if (!_converse.bare_jid) {
+        const msg = "No JID to fetch user settings for";
+        log.error(msg);
+        throw Error(msg);
     }
-    if (_converse.idle_presence_timeout > 0) {
-        _converse.on('addClientFeatures', () => {
-            _converse.api.disco.own.features.add(Strophe.NS.IDLE);
-        });
+    if (!user_settings?.fetched) {
+        const id = `converse.user-settings.${_converse.bare_jid}`;
+        user_settings = new Model({id});
+        user_settings.browserStorage = createStore(id);
+        user_settings.fetched = user_settings.fetch({'promise': true});
     }
+    return user_settings.fetched;
 }
 
-
-function unregisterGlobalEventHandlers () {
-    document.removeEventListener("visibilitychange", _converse.saveWindowState);
-    _converse.emit('unregisteredGlobalEventHandlers');
-}
-
-function cleanup () {
-    // Looks like _converse.initialized was called again without logging
-    // out or disconnecting in the previous session.
-    // This happens in tests. We therefore first clean up.
-    Backbone.history.stop();
-    _converse.chatboxviews.closeAllChatBoxes();
-    unregisterGlobalEventHandlers();
-    window.localStorage.clear();
-    window.sessionStorage.clear();
-    if (_converse.bookmarks) {
-        _converse.bookmarks.reset();
-    }
-    delete _converse.controlboxtoggle;
-    delete _converse.chatboxviews;
-
-    _converse.connection.reset();
-    _converse.tearDown();
-    _converse.stopListening();
-    _converse.off();
-
-    delete _converse.config;
-    initClientConfig();
-}
-
-
-_converse.initialize = async function (settings, callback) {
-    settings = !_.isUndefined(settings) ? settings : {};
-    const init_promise = u.getResolveablePromise();
-    _.each(PROMISES, addPromise);
-    if (!_.isUndefined(_converse.connection)) {
-        cleanup();
-    }
-
-    if ('onpagehide' in window) {
-        // Pagehide gets thrown in more cases than unload. Specifically it
-        // gets thrown when the page is cached and not just
-        // closed/destroyed. It's the only viable event on mobile Safari.
-        // https://www.webkit.org/blog/516/webkit-page-cache-ii-the-unload-event/
-        _converse.unloadevent = 'pagehide';
-    } else if ('onbeforeunload' in window) {
-        _converse.unloadevent = 'beforeunload';
-    } else if ('onunload' in window) {
-        _converse.unloadevent = 'unload';
-    }
-
-    _.assignIn(this, this.default_settings);
-    // Allow only whitelisted configuration attributes to be overwritten
-    _.assignIn(this, _.pick(settings, _.keys(this.default_settings)));
-
-    if (this.authentication === _converse.ANONYMOUS) {
-        if (this.auto_login && !this.jid) {
-            throw new Error("Config Error: you need to provide the server's " +
-                  "domain via the 'jid' option when using anonymous " +
-                  "authentication with auto_login.");
-        }
-    }
-
-    _converse.router.route(/^converse\?debug=(true|false)$/, 'debug', debug => {
-        if (debug === "true") {
-            _converse.debug = true;
-        } else {
-            _converse.debug = false;
-        }
-    });
-
-    /* Localisation */
-    if (!_.isUndefined(i18n)) {
-        i18n.setLocales(settings.i18n, _converse);
-    } else {
-        _converse.locale = 'en';
-    }
-
-    // Module-level variables
-    // ----------------------
-    this.callback = callback || _.noop;
-    /* When reloading the page:
-     * For new sessions, we need to send out a presence stanza to notify
-     * the server/network that we're online.
-     * When re-attaching to an existing session (e.g. via the keepalive
-     * option), we don't need to again send out a presence stanza, because
-     * it's as if "we never left" (see onConnectStatusChanged).
-     * https://github.com/jcbrand/converse.js/issues/521
-     */
-    this.send_initial_presence = true;
-    this.msg_counter = 0;
-    this.user_settings = settings; // Save the user settings so that they can be used by plugins
-
-    // Module-level functions
-    // ----------------------
-
-    this.generateResource = () => `/converse.js-${Math.floor(Math.random()*139749528).toString()}`;
-
-    this.sendCSI = function (stat) {
-        /* Send out a Chat Status Notification (XEP-0352)
-         *
-         * Parameters:
-         *  (String) stat: The user's chat status
-         */
-        _converse.api.send($build(stat, {xmlns: Strophe.NS.CSI}));
-        _converse.inactive = (stat === _converse.INACTIVE) ? true : false;
-    };
-
-    this.onUserActivity = function () {
-        /* Resets counters and flags relating to CSI and auto_away/auto_xa */
-        if (_converse.idle_seconds > 0) {
-            _converse.idle_seconds = 0;
-        }
-        if (!_converse.connection.authenticated) {
-            // We can't send out any stanzas when there's no authenticated connection.
-            // This can happen when the connection reconnects.
-            return;
-        }
-        if (_converse.inactive) {
-            _converse.sendCSI(_converse.ACTIVE);
-        }
-        if (_converse.idle) {
-            _converse.idle = false;
-            _converse.xmppstatus.sendPresence();
-        }
-        if (_converse.auto_changed_status === true) {
-            _converse.auto_changed_status = false;
-            // XXX: we should really remember the original state here, and
-            // then set it back to that...
-            _converse.xmppstatus.set('status', _converse.default_state);
-        }
-    };
-
-    this.onEverySecond = function () {
-        /* An interval handler running every second.
-         * Used for CSI and the auto_away and auto_xa features.
-         */
-        if (!_converse.connection.authenticated) {
-            // We can't send out any stanzas when there's no authenticated connection.
-            // This can happen when the connection reconnects.
-            return;
-        }
-        const stat = _converse.xmppstatus.get('status');
-        _converse.idle_seconds++;
-        if (_converse.csi_waiting_time > 0 &&
-                _converse.idle_seconds > _converse.csi_waiting_time &&
-                !_converse.inactive) {
-            _converse.sendCSI(_converse.INACTIVE);
-        }
-        if (_converse.idle_presence_timeout > 0 &&
-                _converse.idle_seconds > _converse.idle_presence_timeout &&
-                !_converse.idle) {
-            _converse.idle = true;
-            _converse.xmppstatus.sendPresence();
-        }
-        if (_converse.auto_away > 0 &&
-                _converse.idle_seconds > _converse.auto_away &&
-                stat !== 'away' && stat !== 'xa' && stat !== 'dnd') {
-            _converse.auto_changed_status = true;
-            _converse.xmppstatus.set('status', 'away');
-        } else if (_converse.auto_xa > 0 &&
-                _converse.idle_seconds > _converse.auto_xa &&
-                stat !== 'xa' && stat !== 'dnd') {
-            _converse.auto_changed_status = true;
-            _converse.xmppstatus.set('status', 'xa');
-        }
-    };
-
-    this.registerIntervalHandler = function () {
-        /* Set an interval of one second and register a handler for it.
-         * Required for the auto_away, auto_xa and csi_waiting_time features.
-         */
-        if (_converse.auto_away < 1 && _converse.auto_xa < 1 && _converse.csi_waiting_time < 1 && _converse.idle_presence_timeout < 1) {
-            // Waiting time of less then one second means features aren't used.
-            return;
-        }
-        _converse.idle_seconds = 0
-        _converse.auto_changed_status = false; // Was the user's status changed by Converse?
-        window.addEventListener('click', _converse.onUserActivity);
-        window.addEventListener('focus', _converse.onUserActivity);
-        window.addEventListener('keypress', _converse.onUserActivity);
-        window.addEventListener('mousemove', _converse.onUserActivity);
-        const options = {'once': true, 'passive': true};
-        window.addEventListener(_converse.unloadevent, _converse.onUserActivity, options);
-        _converse.everySecondTrigger = window.setInterval(_converse.onEverySecond, 1000);
-    };
-
-    this.setConnectionStatus = function (connection_status, message) {
-        _converse.connfeedback.set({
-            'connection_status': connection_status,
-            'message': message
-        });
-    };
-
-    this.rejectPresenceSubscription = function (jid, message) {
-        /* Reject or cancel another user's subscription to our presence updates.
-         *
-         *  Parameters:
-         *    (String) jid - The Jabber ID of the user whose subscription
-         *      is being canceled.
-         *    (String) message - An optional message to the user
-         */
-        const pres = $pres({to: jid, type: "unsubscribed"});
-        if (message && message !== "") { pres.c("status").t(message); }
-        _converse.api.send(pres);
-    };
-
-    this.reconnect = _.debounce(function () {
-        _converse.log('RECONNECTING');
-        _converse.log('The connection has dropped, attempting to reconnect.');
-        _converse.setConnectionStatus(
-            Strophe.Status.RECONNECTING,
-            __('The connection has dropped, attempting to reconnect.')
-        );
-        _converse.connection.reconnecting = true;
-        _converse.tearDown();
-        _converse.logIn(null, true);
-    }, 3000, {'leading': true});
-
-    this.disconnect = function () {
-        _converse.log('DISCONNECTED');
-        delete _converse.connection.reconnecting;
-        _converse.connection.reset();
-        _converse.tearDown();
-        _converse.clearSession();
-        _converse.emit('disconnected');
-    };
-
-    this.onDisconnected = function () {
-        /* Gets called once strophe's status reaches Strophe.Status.DISCONNECTED.
-         * Will either start a teardown process for converse.js or attempt
-         * to reconnect.
-         */
-        const reason = _converse.disconnection_reason;
-
-        if (_converse.disconnection_cause === Strophe.Status.AUTHFAIL) {
-            if (_converse.credentials_url && _converse.auto_reconnect) {
-                /* In this case, we reconnect, because we might be receiving
-                 * expirable tokens from the credentials_url.
-                 */
-                _converse.emit('will-reconnect');
-                return _converse.reconnect();
-            } else {
-                return _converse.disconnect();
-            }
-        } else if (_converse.disconnection_cause === _converse.LOGOUT ||
-                (!_.isUndefined(reason) && reason === _.get(Strophe, 'ErrorCondition.NO_AUTH_MECH')) ||
-                reason === "host-unknown" ||
-                reason === "remote-connection-failed" ||
-                !_converse.auto_reconnect) {
-            return _converse.disconnect();
-        }
-        _converse.emit('will-reconnect');
-        _converse.reconnect();
-    };
-
-    this.setDisconnectionCause = function (cause, reason, override) {
-        /* Used to keep track of why we got disconnected, so that we can
-         * decide on what the next appropriate action is (in onDisconnected)
-         */
-        if (_.isUndefined(cause)) {
-            delete _converse.disconnection_cause;
-            delete _converse.disconnection_reason;
-        } else if (_.isUndefined(_converse.disconnection_cause) || override) {
-            _converse.disconnection_cause = cause;
-            _converse.disconnection_reason = reason;
-        }
-    };
-
-    this.onConnectStatusChanged = function (status, message) {
-        /* Callback method called by Strophe as the Strophe.Connection goes
-         * through various states while establishing or tearing down a
-         * connection.
-         */
-        _converse.log(`Status changed to: ${_converse.CONNECTION_STATUS[status]}`);
-        if (status === Strophe.Status.CONNECTED || status === Strophe.Status.ATTACHED) {
-            _converse.setConnectionStatus(status);
-            // By default we always want to send out an initial presence stanza.
-            _converse.send_initial_presence = true;
-            _converse.setDisconnectionCause();
-            if (_converse.connection.reconnecting) {
-                _converse.log(status === Strophe.Status.CONNECTED ? 'Reconnected' : 'Reattached');
-                _converse.onConnected(true);
-            } else {
-                _converse.log(status === Strophe.Status.CONNECTED ? 'Connected' : 'Attached');
-                if (_converse.connection.restored) {
-                    // No need to send an initial presence stanza when
-                    // we're restoring an existing session.
-                    _converse.send_initial_presence = false;
-                }
-                _converse.onConnected();
-            }
-        } else if (status === Strophe.Status.DISCONNECTED) {
-            _converse.setDisconnectionCause(status, message);
-            _converse.onDisconnected();
-        } else if (status === Strophe.Status.ERROR) {
-            _converse.setConnectionStatus(
-                status,
-                __('An error occurred while connecting to the chat server.')
-            );
-        } else if (status === Strophe.Status.CONNECTING) {
-            _converse.setConnectionStatus(status);
-        } else if (status === Strophe.Status.AUTHENTICATING) {
-            _converse.setConnectionStatus(status);
-        } else if (status === Strophe.Status.AUTHFAIL) {
-            if (!message) {
-                message = __('Your Jabber ID and/or password is incorrect. Please try again.');
-            }
-            _converse.setConnectionStatus(status, message);
-            _converse.setDisconnectionCause(status, message, true);
-            _converse.onDisconnected();
-        } else if (status === Strophe.Status.CONNFAIL) {
-            let feedback = message;
-            if (message === "host-unknown" || message == "remote-connection-failed") {
-                feedback = __("Sorry, we could not connect to the XMPP host with domain: %1$s",
-                    `\"${Strophe.getDomainFromJid(_converse.connection.jid)}\"`);
-            } else if (!_.isUndefined(message) && message === _.get(Strophe, 'ErrorCondition.NO_AUTH_MECH')) {
-                feedback = __("The XMPP server did not offer a supported authentication mechanism");
-            }
-            _converse.setConnectionStatus(status, feedback);
-            _converse.setDisconnectionCause(status, message);
-        } else if (status === Strophe.Status.DISCONNECTING) {
-            _converse.setDisconnectionCause(status, message);
-        }
-    };
-
-    this.incrementMsgCounter = function () {
-        this.msg_counter += 1;
-        const unreadMsgCount = this.msg_counter;
-        let title = document.title;
-        if (_.isNil(title)) {
-            return;
-        }
-        if (title.search(/^Messages \(\d+\) /) === -1) {
-            title = `Messages (${unreadMsgCount}) ${title}`;
-        } else {
-            title = title.replace(/^Messages \(\d+\) /, `Messages (${unreadMsgCount})`);
-        }
-    };
-
-    this.clearMsgCounter = function () {
-        this.msg_counter = 0;
-        let title = document.title;
-        if (_.isNil(title)) {
-            return;
-        }
-        if (title.search(/^Messages \(\d+\) /) !== -1) {
-            title = title.replace(/^Messages \(\d+\) /, "");
-        }
-    };
-
-    this.initStatus = (reconnecting) => {
-        // If there's no xmppstatus obj, then we were never connected to
-        // begin with, so we set reconnecting to false.
-        reconnecting = _.isUndefined(_converse.xmppstatus) ? false : reconnecting;
-        if (reconnecting) {
-            _converse.onStatusInitialized(reconnecting);
-        } else {
-            const id = `converse.xmppstatus-${_converse.bare_jid}`;
-            this.xmppstatus = new this.XMPPStatus({'id': id});
-            this.xmppstatus.browserStorage = new Backbone.BrowserStorage.session(id);
-            this.xmppstatus.fetch({
-                'success': _.partial(_converse.onStatusInitialized, reconnecting),
-                'error': _.partial(_converse.onStatusInitialized, reconnecting)
-            });
-        }
-    }
-
-
-    this.initSession = function () {
-        const id = 'converse.bosh-session';
-        _converse.session = new Backbone.Model({id});
-        _converse.session.browserStorage = new Backbone.BrowserStorage.session(id);
-        _converse.session.fetch();
-        _converse.emit('sessionInitialized');
-    };
-
-    this.clearSession = function () {
-        if (!_converse.config.get('trusted')) {
-            window.localStorage.clear();
-            window.sessionStorage.clear();
-        } else if (!_.isUndefined(this.session) && this.session.browserStorage) {
-            this.session.browserStorage._clear();
-        }
-        _converse.emit('clearSession');
-    };
-
-    this.logOut = function () {
-        _converse.clearSession();
-        _converse.setDisconnectionCause(_converse.LOGOUT, undefined, true);
-        if (!_.isUndefined(_converse.connection)) {
-            _converse.connection.disconnect();
-        } else {
-            _converse.tearDown();
-        }
-        // Recreate all the promises
-        _.each(_.keys(_converse.promises), addPromise);
-
-        _converse.emit('logout');
-    };
-
-    this.saveWindowState = function (ev) {
-        // XXX: eventually we should be able to just use
-        // document.visibilityState (when we drop support for older
-        // browsers).
-        let state;
-        const event_map = {
-            'focus': "visible",
-            'focusin': "visible",
-            'pageshow': "visible",
-            'blur': "hidden",
-            'focusout': "hidden",
-            'pagehide': "hidden"
-        };
-        ev = ev || document.createEvent('Events');
-        if (ev.type in event_map) {
-            state = event_map[ev.type];
-        } else {
-            state = document.hidden ? "hidden" : "visible";
-        }
-        if (state  === 'visible') {
-            _converse.clearMsgCounter();
-        }
-        _converse.windowState = state;
-        _converse.emit('windowStateChanged', {state});
-    };
-
-    this.registerGlobalEventHandlers = function () {
-        document.addEventListener("visibilitychange", _converse.saveWindowState);
-        _converse.saveWindowState({'type': document.hidden ? "blur" : "focus"}); // Set initial state
-        _converse.emit('registeredGlobalEventHandlers');
-    };
-
-    this.enableCarbons = function () {
-        /* Ask the XMPP server to enable Message Carbons
-         * See XEP-0280 https://xmpp.org/extensions/xep-0280.html#enabling
-         */
-        if (!this.message_carbons || this.session.get('carbons_enabled')) {
-            return;
-        }
-        const carbons_iq = new Strophe.Builder('iq', {
-            'from': this.connection.jid,
-            'id': 'enablecarbons',
-            'type': 'set'
-          })
-          .c('enable', {xmlns: Strophe.NS.CARBONS});
-        this.connection.addHandler((iq) => {
-            if (iq.querySelectorAll('error').length > 0) {
-                _converse.log(
-                    'An error occurred while trying to enable message carbons.',
-                    Strophe.LogLevel.WARN);
-            } else {
-                this.session.save({'carbons_enabled': true});
-                _converse.log('Message carbons have been enabled.');
-            }
-        }, null, "iq", null, "enablecarbons");
-        this.connection.send(carbons_iq);
-    };
-
-
-    this.sendInitialPresence = function () {
-        if (_converse.send_initial_presence) {
-            _converse.xmppstatus.sendPresence();
-        }
-    };
-
-    this.onStatusInitialized = function (reconnecting) {
-        _converse.emit('statusInitialized', reconnecting);
-        if (reconnecting) {
-            _converse.emit('reconnected');
-        } else {
-            init_promise.resolve();
-            _converse.emit('initialized');
-            _converse.emit('connected');
-        }
-    };
-
-    this.setUserJID = function () {
-        _converse.jid = _converse.connection.jid;
-        _converse.bare_jid = Strophe.getBareJidFromJid(_converse.connection.jid);
-        _converse.resource = Strophe.getResourceFromJid(_converse.connection.jid);
-        _converse.domain = Strophe.getDomainFromJid(_converse.connection.jid);
-        _converse.emit('setUserJID');
-    };
-
-    this.onConnected = function (reconnecting) {
-        /* Called as soon as a new connection has been established, either
-         * by logging in or by attaching to an existing BOSH session.
-         */
-        _converse.connection.flush(); // Solves problem of returned PubSub BOSH response not received by browser
-        _converse.setUserJID();
-        _converse.initSession();
-        _converse.enableCarbons();
-        _converse.initStatus(reconnecting)
-    };
-
-
-    this.ConnectionFeedback = Backbone.Model.extend({
-        defaults: {
-            'connection_status': Strophe.Status.DISCONNECTED,
-            'message': ''
-        },
-
-        initialize () {
-            this.on('change', () => {
-                _converse.emit('connfeedback', _converse.connfeedback);
-            });
-        }
-    });
-    this.connfeedback = new this.ConnectionFeedback();
-
-
-    this.XMPPStatus = Backbone.Model.extend({
-
-        defaults () {
-            return {
-                "jid": _converse.bare_jid,
-                "status":  _converse.default_state
-            }
-        },
-
-        initialize () {
-            this.vcard = _converse.vcards.findWhere({'jid': this.get('jid')});
-            if (_.isNil(this.vcard)) {
-                this.vcard = _converse.vcards.create({'jid': this.get('jid')});
-            }
-
-            this.on('change:status', (item) => {
-                const status = this.get('status');
-                this.sendPresence(status);
-                _converse.emit('statusChanged', status);
-            });
-
-            this.on('change:status_message', () => {
-                const status_message = this.get('status_message');
-                this.sendPresence(this.get('status'), status_message);
-                _converse.emit('statusMessageChanged', status_message);
-            });
-        },
-
-        constructPresence (type, status_message) {
-            let presence;
-            type = _.isString(type) ? type : (this.get('status') || _converse.default_state);
-            status_message = _.isString(status_message) ? status_message : this.get('status_message');
-            // Most of these presence types are actually not explicitly sent,
-            // but I add all of them here for reference and future proofing.
-            if ((type === 'unavailable') ||
-                    (type === 'probe') ||
-                    (type === 'error') ||
-                    (type === 'unsubscribe') ||
-                    (type === 'unsubscribed') ||
-                    (type === 'subscribe') ||
-                    (type === 'subscribed')) {
-                presence = $pres({'type': type});
-            } else if (type === 'offline') {
-                presence = $pres({'type': 'unavailable'});
-            } else if (type === 'online') {
-                presence = $pres();
-            } else {
-                presence = $pres().c('show').t(type).up();
-            }
-            if (status_message) {
-                presence.c('status').t(status_message).up();
-            }
-            presence.c('priority').t(
-                _.isNaN(Number(_converse.priority)) ? 0 : _converse.priority
-            ).up();
-            if (_converse.idle) {
-                const idle_since = new Date();
-                idle_since.setSeconds(idle_since.getSeconds() - _converse.idle_seconds);
-                presence.c('idle', {xmlns: Strophe.NS.IDLE, since: idle_since.toISOString()});
-            }
-            return presence;
-        },
-
-        sendPresence (type, status_message) {
-            _converse.api.send(this.constructPresence(type, status_message));
-        }
-    });
-
-
-    this.fetchLoginCredentials = () =>
-        new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', _converse.credentials_url, true);
-            xhr.setRequestHeader('Accept', "application/json, text/javascript");
-            xhr.onload = function() {
-                if (xhr.status >= 200 && xhr.status < 400) {
-                    const data = JSON.parse(xhr.responseText);
-                    resolve({
-                        'jid': data.jid,
-                        'password': data.password
-                    });
-                } else {
-                    xhr.onerror();
-                }
-            };
-            xhr.onerror = function () {
-                delete _converse.connection;
-                _converse.emit('noResumeableSession', this);
-                reject(xhr.responseText);
-            };
-            xhr.send();
-        });
-
-    this.startNewBOSHSession = function () {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', _converse.prebind_url, true);
-        xhr.setRequestHeader('Accept', "application/json, text/javascript");
-        xhr.onload = function() {
-            if (xhr.status >= 200 && xhr.status < 400) {
-                const data = JSON.parse(xhr.responseText);
-                _converse.connection.attach(
-                        data.jid, data.sid, data.rid,
-                        _converse.onConnectStatusChanged);
-            } else {
-                xhr.onerror();
-            }
-        };
-        xhr.onerror = function () {
-            delete _converse.connection;
-            _converse.emit('noResumeableSession', this);
-        };
-        xhr.send();
-    };
-
-    this.restoreBOSHSession = function (jid_is_required) {
-        /* Tries to restore a cached BOSH session. */
-        if (!this.jid) {
-            const msg = "restoreBOSHSession: tried to restore a \"keepalive\" session "+
-                "but we don't have the JID for the user!";
-            if (jid_is_required) {
-                throw new Error(msg);
-            } else {
-                _converse.log(msg);
-            }
-        }
-        try {
-            this.connection.restore(this.jid, this.onConnectStatusChanged);
-            return true;
-        } catch (e) {
-            _converse.log(
-                "Could not restore session for jid: "+
-                this.jid+" Error message: "+e.message, Strophe.LogLevel.WARN);
-            this.clearSession(); // We want to clear presences (see #555)
-            return false;
-        }
-    };
-
-    this.attemptPreboundSession = function (reconnecting) {
-        /* Handle session resumption or initialization when prebind is
-         * being used.
-         */
-        if (!reconnecting) {
-            if (this.keepalive && this.restoreBOSHSession(true)) {
-                return;
-            }
-            // No keepalive, or session resumption has failed.
-            if (this.jid && this.sid && this.rid) {
-                return this.connection.attach(
-                    this.jid, this.sid, this.rid,
-                    this.onConnectStatusChanged
-                );
-            }
-        }
-        if (this.prebind_url) {
-            return this.startNewBOSHSession();
-        } else {
-            throw new Error(
-                "attemptPreboundSession: If you use prebind and not keepalive, "+
-                "then you MUST supply JID, RID and SID values or a prebind_url.");
-        }
-    };
-
-    this.attemptNonPreboundSession = function (credentials, reconnecting) {
-        /* Handle session resumption or initialization when prebind is not being used.
-         *
-         * Two potential options exist and are handled in this method:
-         *  1. keepalive
-         *  2. auto_login
-         */
-        if (!reconnecting && this.keepalive && this.restoreBOSHSession()) {
-            return;
-        }
-
-        if (credentials) {
-            // When credentials are passed in, they override prebinding
-            // or credentials fetching via HTTP
-            this.autoLogin(credentials);
-        } else if (this.auto_login) {
-            if (this.credentials_url) {
-                this.fetchLoginCredentials().then(
-                    this.autoLogin.bind(this),
-                    this.autoLogin.bind(this)
-                );
-            } else if (!this.jid) {
-                throw new Error(
-                    "attemptNonPreboundSession: If you use auto_login, "+
-                    "you also need to give either a jid value (and if "+
-                    "applicable a password) or you need to pass in a URL "+
-                    "from where the username and password can be fetched "+
-                    "(via credentials_url)."
-                );
-            } else {
-                this.autoLogin(); // Could be ANONYMOUS or EXTERNAL
-            }
-        } else if (reconnecting) {
-            this.autoLogin();
-        }
-    };
-
-    this.autoLogin = function (credentials) {
-        if (credentials) {
-            // If passed in, the credentials come from credentials_url,
-            // so we set them on the converse object.
-            this.jid = credentials.jid;
-        }
-        if (this.authentication === _converse.ANONYMOUS || this.authentication === _converse.EXTERNAL) {
-            if (!this.jid) {
-                throw new Error("Config Error: when using anonymous login " +
-                    "you need to provide the server's domain via the 'jid' option. " +
-                    "Either when calling converse.initialize, or when calling " +
-                    "_converse.api.user.login.");
-            }
-            if (!this.connection.reconnecting) {
-                this.connection.reset();
-            }
-            this.connection.connect(this.jid.toLowerCase(), null, this.onConnectStatusChanged, BOSH_WAIT);
-        } else if (this.authentication === _converse.LOGIN) {
-            const password = _.isNil(credentials) ? (_converse.connection.pass || this.password) : credentials.password;
-            if (!password) {
-                if (this.auto_login) {
-                    throw new Error("initConnection: If you use auto_login and "+
-                        "authentication='login' then you also need to provide a password.");
-                }
-                _converse.setDisconnectionCause(Strophe.Status.AUTHFAIL, undefined, true);
-                _converse.disconnect();
-                return;
-            }
-            const resource = Strophe.getResourceFromJid(this.jid);
-            if (!resource) {
-                this.jid = this.jid.toLowerCase() + _converse.generateResource();
-            } else {
-                this.jid = Strophe.getBareJidFromJid(this.jid).toLowerCase()+'/'+resource;
-            }
-            if (!this.connection.reconnecting) {
-                this.connection.reset();
-            }
-            this.connection.connect(this.jid, password, this.onConnectStatusChanged, BOSH_WAIT);
-        }
-    };
-
-    this.logIn = function (credentials, reconnecting) {
-        // We now try to resume or automatically set up a new session.
-        // Otherwise the user will be shown a login form.
-        if (this.authentication === _converse.PREBIND) {
-            this.attemptPreboundSession(reconnecting);
-        } else {
-            this.attemptNonPreboundSession(credentials, reconnecting);
-        }
-    };
-
-    this.tearDown = function () {
-        /* Remove those views which are only allowed with a valid
-         * connection.
-         */
-        _converse.emit('beforeTearDown');
-        if (!_.isUndefined(_converse.session)) {
-            _converse.session.destroy();
-        }
-        window.removeEventListener('click', _converse.onUserActivity);
-        window.removeEventListener('focus', _converse.onUserActivity);
-        window.removeEventListener('keypress', _converse.onUserActivity);
-        window.removeEventListener('mousemove', _converse.onUserActivity);
-        window.removeEventListener(_converse.unloadevent, _converse.onUserActivity);
-        window.clearInterval(_converse.everySecondTrigger);
-        _converse.emit('afterTearDown');
-        return _converse;
-    };
-
-
-    // Initialization
-    // --------------
-    // This is the end of the initialize method.
-    if (settings.connection) {
-        this.connection = settings.connection;
-    }
-
-    if (_.get(_converse.connection, 'service') === 'jasmine tests') {
-        finishInitialization();
-        return _converse;
-    } else if (!_.isUndefined(i18n)) {
-        const url = u.interpolate(_converse.locales_url, {'locale': _converse.locale});
-        try {
-            await i18n.fetchTranslations(_converse.locale, _converse.locales, url);
-        } catch (e) {
-            _converse.log(e.message, Strophe.LogLevel.FATAL);
-        }
-    }
-    finishInitialization();
-    return init_promise;
-};
 
 /**
  * ### The private API
@@ -1248,42 +320,162 @@ _converse.initialize = async function (settings, callback) {
  * @namespace _converse.api
  * @memberOf _converse
  */
-_converse.api = {
+export const api = _converse.api = {
     /**
      * This grouping collects API functions related to the XMPP connection.
      *
      * @namespace _converse.api.connection
      * @memberOf _converse.api
      */
-    'connection': {
+    connection: {
         /**
          * @method _converse.api.connection.connected
          * @memberOf _converse.api.connection
          * @returns {boolean} Whether there is an established connection or not.
          */
-        'connected' () {
-            return _converse.connection && _converse.connection.connected || false;
+        connected () {
+            return _converse?.connection?.connected && true;
         },
+
         /**
          * Terminates the connection.
          *
-         * @method _converse.api.connection.disconnect
+         * @method _converse.api.connection.disconnectkjjjkk
          * @memberOf _converse.api.connection
          */
-        'disconnect' () {
-            _converse.connection.disconnect();
+        disconnect () {
+            if (_converse.connection) {
+                _converse.connection.disconnect();
+            }
         },
+
+        /**
+         * Can be called once the XMPP connection has dropped and we want
+         * to attempt reconnection.
+         * Only needs to be called once, if reconnect fails Converse will
+         * attempt to reconnect every two seconds, alternating between BOSH and
+         * Websocket if URLs for both were provided.
+         * @method reconnect
+         * @memberOf _converse.api.connection
+         */
+        async reconnect () {
+            const conn_status = _converse.connfeedback.get('connection_status');
+
+            if (api.settings.get("authentication") === _converse.ANONYMOUS) {
+                await tearDown();
+                await clearSession();
+            }
+            if (conn_status === Strophe.Status.CONNFAIL) {
+                // When reconnecting with a new transport, we call setUserJID
+                // so that a new resource is generated, to avoid multiple
+                // server-side sessions with the same resource.
+                //
+                // We also call `_proto._doDisconnect` so that connection event handlers
+                // for the old transport are removed.
+                if (api.connection.isType('websocket') && api.settings.get('bosh_service_url')) {
+                    await _converse.setUserJID(_converse.bare_jid);
+                    _converse.connection._proto._doDisconnect();
+                    _converse.connection._proto = new Strophe.Bosh(_converse.connection);
+                    _converse.connection.service = api.settings.get('bosh_service_url');
+                } else if (api.connection.isType('bosh') && api.settings.get("websocket_url")) {
+                    if (api.settings.get("authentication") === _converse.ANONYMOUS) {
+                        // When reconnecting anonymously, we need to connect with only
+                        // the domain, not the full JID that we had in our previous
+                        // (now failed) session.
+                        await _converse.setUserJID(api.settings.get("jid"));
+                    } else {
+                        await _converse.setUserJID(_converse.bare_jid);
+                    }
+                    _converse.connection._proto._doDisconnect();
+                    _converse.connection._proto = new Strophe.Websocket(_converse.connection);
+                    _converse.connection.service = api.settings.get("websocket_url");
+                }
+            } else if (conn_status === Strophe.Status.AUTHFAIL && api.settings.get("authentication") === _converse.ANONYMOUS) {
+                // When reconnecting anonymously, we need to connect with only
+                // the domain, not the full JID that we had in our previous
+                // (now failed) session.
+                await _converse.setUserJID(api.settings.get("jid"));
+            }
+
+            if (_converse.connection.reconnecting) {
+                _converse.connection.debouncedReconnect();
+            } else {
+                return _converse.connection.reconnect();
+            }
+        },
+
+        /**
+         * Utility method to determine the type of connection we have
+         * @method isType
+         * @memberOf _converse.api.connection
+         * @returns {boolean}
+         */
+        isType (type) {
+            return _converse.connection.isType(type);
+        }
     },
 
     /**
-     * Lets you emit (i.e. trigger) events, which can be listened to via
+     * Lets you trigger events, which can be listened to via
      * {@link _converse.api.listen.on} or {@link _converse.api.listen.once}
      * (see [_converse.api.listen](http://localhost:8000/docs/html/api/-_converse.api.listen.html)).
      *
-     * @method _converse.api.emit
+     * Some events also double as promises and can be waited on via {@link _converse.api.waitUntil}.
+     *
+     * @method _converse.api.trigger
+     * @param {string} name - The event name
+     * @param {...any} [argument] - Argument to be passed to the event handler
+     * @param {object} [options]
+     * @param {boolean} [options.synchronous] - Whether the event is synchronous or not.
+     *  When a synchronous event is fired, a promise will be returned
+     *  by {@link _converse.api.trigger} which resolves once all the
+     *  event handlers' promises have been resolved.
      */
-    'emit' () {
-        _converse.emit.apply(_converse, arguments);
+    async trigger (name) {
+        if (!_converse._events) {
+            return;
+        }
+        const args = Array.from(arguments);
+        const options = args.pop();
+        if (options && options.synchronous) {
+            const events = _converse._events[name] || [];
+            await Promise.all(events.map(e => e.callback.apply(e.ctx, args.splice(1))));
+        } else {
+            _converse.trigger.apply(_converse, arguments);
+        }
+        const promise = _converse.promises[name];
+        if (promise !== undefined) {
+            promise.resolve();
+        }
+    },
+
+    /**
+     * Triggers a hook which can be intercepted by registered listeners via
+     * {@link _converse.api.listen.on} or {@link _converse.api.listen.once}.
+     * (see [_converse.api.listen](http://localhost:8000/docs/html/api/-_converse.api.listen.html)).
+     * A hook is a special kind of event which allows you to intercept a data
+     * structure in order to modify it, before passing it back.
+     * @async
+     * @param {string} name - The hook name
+     * @param {...any} context - The context to which the hook applies (could be for example, a {@link _converse.ChatBox)).
+     * @param {...any} data - The data structure to be intercepted and modified by the hook listeners.
+     * @returns {Promise<any>} - A promise that resolves with the modified data structure.
+     */
+    hook (name, context, data) {
+        const events = _converse._events[name] || [];
+        if (events.length) {
+            // Create a chain of promises, with each one feeding its output to
+            // the next. The first input is a promise with the original data
+            // sent to this hook.
+            const o = events.reduce((o, e) => o.then(d => e.callback(context, d)), Promise.resolve(data));
+            o.catch(e => {
+                log.error(e)
+                throw e;
+            });
+            return o;
+        } else {
+            return data;
+        }
     },
 
     /**
@@ -1292,15 +484,16 @@ _converse.api = {
      * @namespace _converse.api.user
      * @memberOf _converse.api
      */
-    'user': {
+    user: {
         /**
          * @method _converse.api.user.jid
          * @returns {string} The current user's full JID (Jabber ID)
          * @example _converse.api.user.jid())
          */
-        'jid' () {
+        jid () {
             return _converse.connection.jid;
         },
+
         /**
          * Logs the user in.
          *
@@ -1309,93 +502,136 @@ _converse.api = {
          * on whether prebinding is used or not.
          *
          * @method _converse.api.user.login
-         * @param {object} [credentials] An object with the credentials.
-         * @example
-         * converse.plugins.add('myplugin', {
-         *     initialize: function () {
-         *
-         *         this._converse.api.user.login({
-         *             'jid': 'dummy@example.com',
-         *             'password': 'secret'
-         *         });
-         *
-         *     }
-         * });
+         * @param {string} [jid]
+         * @param {string} [password]
+         * @param {boolean} [automatic=false] - An internally used flag that indicates whether
+         *  this method was called automatically once the connection has been
+         *  initialized. It's used together with the `auto_login` configuration flag
+         *  to determine whether Converse should try to log the user in if it
+         *  fails to restore a previous auth'd session.
+         *  @returns  {void}
          */
-        'login' (credentials) {
-            _converse.logIn(credentials);
+        async login (jid, password, automatic=false) {
+            jid = jid || _converse.jid;
+            if (!_converse.connection?.jid || (jid && !u.isSameDomain(_converse.connection.jid, jid))) {
+                await _converse.initConnection();
+            }
+            if (api.settings.get("connection_options")?.worker && (await _converse.connection.restoreWorkerSession())) {
+                return;
+            }
+            if (jid) {
+                jid = await _converse.setUserJID(jid);
+            }
+
+            // See whether there is a BOSH session to re-attach to
+            const bosh_plugin = _converse.pluggable.plugins['converse-bosh'];
+            if (bosh_plugin && bosh_plugin.enabled()) {
+                if (await _converse.restoreBOSHSession()) {
+                    return;
+                } else if (api.settings.get("authentication") === _converse.PREBIND && (!automatic || api.settings.get("auto_login"))) {
+                    return _converse.startNewPreboundBOSHSession();
+                }
+            }
+            password = password || api.settings.get("password");
+            const credentials = (jid && password) ? { jid, password } : null;
+            attemptNonPreboundSession(credentials, automatic);
         },
+
         /**
          * Logs the user out of the current XMPP session.
-         *
          * @method _converse.api.user.logout
          * @example _converse.api.user.logout();
          */
-        'logout' () {
-            _converse.logOut();
+        logout () {
+            const promise = u.getResolveablePromise();
+            const complete = () => {
+                // Recreate all the promises
+                Object.keys(_converse.promises).forEach(replacePromise);
+                delete _converse.jid
+                /**
+                 * Triggered once the user has logged out.
+                 * @event _converse#logout
+                 */
+                api.trigger('logout');
+                promise.resolve();
+            }
+
+            _converse.connection.setDisconnectionCause(_converse.LOGOUT, undefined, true);
+            if (_converse.connection !== undefined) {
+                api.listen.once('disconnected', () => complete());
+                _converse.connection.disconnect();
+            } else {
+                complete();
+            }
+            return promise;
         },
+
         /**
-         * Set and get the user's chat status, also called their *availability*.
-         *
-         * @namespace _converse.api.user.status
+         * API for accessing and setting user settings. User settings are
+         * different from the application settings from {@link _converse.api.settings}
+         * because they are per-user and set via user action.
+         * @namespace _converse.api.user.settings
          * @memberOf _converse.api.user
          */
-        'status': {
-            /** Return the current user's availability status.
-             *
-             * @method _converse.api.user.status.get
-             * @example _converse.api.user.status.get();
-             */
-            'get' () {
-                return _converse.xmppstatus.get('status');
-            },
+        settings: {
             /**
-             * The user's status can be set to one of the following values:
-             *
-             * @method _converse.api.user.status.set
-             * @param {string} value The user's chat status (e.g. 'away', 'dnd', 'offline', 'online', 'unavailable' or 'xa')
-             * @param {string} [message] A custom status message
-             *
-             * @example this._converse.api.user.status.set('dnd');
-             * @example this._converse.api.user.status.set('dnd', 'In a meeting');
+             * Returns the user settings model. Useful when you want to listen for change events.
+             * @method _converse.api.user.settings.getModel
+             * @returns {Promise<Model>}
+             * @example const settings = await _converse.api.user.settings.getModel();
              */
-            'set' (value, message) {
-                const data = {'status': value};
-                if (!_.includes(_.keys(_converse.STATUS_WEIGHTS), value)) {
-                    throw new Error('Invalid availability value. See https://xmpp.org/rfcs/rfc3921.html#rfc.section.2.2.2.1');
-                }
-                if (_.isString(message)) {
-                    data.status_message = message;
-                }
-                _converse.xmppstatus.sendPresence(value);
-                _converse.xmppstatus.save(data);
+            async getModel () {
+                await initUserSettings();
+                return user_settings;
             },
 
             /**
-             * Set and retrieve the user's custom status message.
-             *
-             * @namespace _converse.api.user.status.message
-             * @memberOf _converse.api.user.status
+             * Get the value of a particular user setting.
+             * @method _converse.api.user.settings.get
+             * @param {String} key - The setting name
+             * @param {*} fallback - An optional fallback value if the user setting is undefined
+             * @returns {Promise} Promise which resolves with the value of the particular configuration setting.
+             * @example _converse.api.user.settings.get("foo");
              */
-            'message': {
-                /**
-                 * @method _converse.api.user.status.message.get
-                 * @returns {string} The status message
-                 * @example const message = _converse.api.user.status.message.get()
-                 */
-                'get' () {
-                    return _converse.xmppstatus.get('status_message');
-                },
-                /**
-                 * @method _converse.api.user.status.message.set
-                 * @param {string} status The status message
-                 * @example _converse.api.user.status.message.set('In a meeting');
-                 */
-                'set' (status) {
-                    _converse.xmppstatus.save({'status_message': status});
+            async get (key, fallback) {
+                await initUserSettings();
+                return user_settings.get(key) === undefined ? fallback : user_settings.get(key);
+            },
+
+            /**
+             * Set one or many user settings.
+             * @async
+             * @method _converse.api.user.settings.set
+             * @param {Object} [settings] An object containing configuration settings.
+             * @param {string} [key] Alternatively to passing in an object, you can pass in a key and a value.
+             * @param {string} [value]
+             * @example _converse.api.user.settings.set("foo", "bar");
+             * @example
+             * _converse.api.user.settings.set({
+             *     "foo": "bar",
+             *     "baz": "buz"
+             * });
+             */
+            async set (key, val) {
+                await initUserSettings();
+                if (isObject(key)) {
+                    return user_settings.save(key, {'promise': true});
+                } else {
+                    const o = {};
+                    o[key] = val;
+                    return user_settings.save(o, {'promise': true});
                 }
+            },
+
+            /**
+             * Clears all the user settings
+             * @method _converse.api.user.settings.clear
+             */
+            async clear () {
+                await initUserSettings();
+                user_settings.clear();
             }
-        },
+        }
     },
 
     /**
@@ -1406,15 +642,19 @@ _converse.api = {
      * @namespace _converse.api.settings
      * @memberOf _converse.api
      */
-    'settings': {
+    settings: {
         /**
          * Allows new configuration settings to be specified, or new default values for
          * existing configuration settings to be specified.
          *
-         * @method _converse.api.settings.update
+         * Note, calling this method *after* converse.initialize has been
+         * called will *not* change the initialization settings provided via
+         * `converse.initialize`.
+         *
+         * @method _converse.api.settings.extend
          * @param {object} settings The configuration settings
          * @example
-         * _converse.api.settings.update({
+         * _converse.api.settings.extend({
          *    'enable_foo': true
          * });
          *
@@ -1424,21 +664,34 @@ _converse.api = {
          *     'enable_foo': false
          * });
          */
-        'update' (settings) {
-            u.merge(_converse.default_settings, settings);
-            u.merge(_converse, settings);
-            u.applyUserSettings(_converse, settings, _converse.user_settings);
+        extend (settings) {
+            u.merge(DEFAULT_SETTINGS, settings);
+            // When updating the settings, we need to avoid overwriting the
+            // initialization_settings (i.e. the settings passed in via converse.initialize).
+            const allowed_keys = Object.keys(pick(settings,Object.keys(DEFAULT_SETTINGS)));
+            const allowed_site_settings = pick(initialization_settings, allowed_keys);
+            const updated_settings = assignIn(pick(settings, allowed_keys), allowed_site_settings);
+            u.merge(_converse.settings, updated_settings);
+            u.merge(_converse, updated_settings); // FIXME: remove
         },
+
+        update (settings) {
+            log.warn("The api.settings.update method has been deprecated and will be removed. "+
+                     "Please use api.settings.extend instead.");
+            return this.extend(settings);
+        },
+
         /**
          * @method _converse.api.settings.get
          * @returns {*} Value of the particular configuration setting.
          * @example _converse.api.settings.get("play_sounds");
          */
-        'get' (key) {
-            if (_.includes(_.keys(_converse.default_settings), key)) {
+        get (key) {
+            if (Object.keys(DEFAULT_SETTINGS).includes(key)) {
                 return _converse[key];
             }
         },
+
         /**
          * Set one or many configuration settings.
          *
@@ -1453,23 +706,25 @@ _converse.api = {
          * @example _converse.api.settings.set("play_sounds", true);
          * @example
          * _converse.api.settings.set({
-         *     "play_sounds", true,
-         *     "hide_offline_users" true
+         *     "play_sounds": true,
+         *     "hide_offline_users": true
          * });
          */
-        'set' (key, val) {
+        set (key, val) {
             const o = {};
-            if (_.isObject(key)) {
-                _.assignIn(_converse, _.pick(key, _.keys(_converse.default_settings)));
-            } else if (_.isString("string")) {
+            if (isObject(key)) {
+                assignIn(_converse, pick(key, Object.keys(DEFAULT_SETTINGS)));
+                assignIn(_converse.settings, pick(key, Object.keys(DEFAULT_SETTINGS)));
+            } else if (typeof key === 'string') {
                 o[key] = val;
-                _.assignIn(_converse, _.pick(o, _.keys(_converse.default_settings)));
+                assignIn(_converse, pick(o, Object.keys(DEFAULT_SETTINGS)));
+                assignIn(_converse.settings, pick(o, Object.keys(DEFAULT_SETTINGS)));
             }
         }
     },
 
     /**
-     * Converse and its plugins emit various events which you can listen to via the
+     * Converse and its plugins trigger various events which you can listen to via the
      * {@link _converse.api.listen} namespace.
      *
      * Some of these events are also available as [ES2015 Promises](http://es6-features.org/#PromiseUsage)
@@ -1486,7 +741,6 @@ _converse.api = {
      * * [rosterContactsFetched](/docs/html/events.html#rosterContactsFetched)
      * * [rosterGroupsFetched](/docs/html/events.html#rosterGroupsFetched)
      * * [rosterInitialized](/docs/html/events.html#rosterInitialized)
-     * * [statusInitialized](/docs/html/events.html#statusInitialized)
      * * [roomsPanelRendered](/docs/html/events.html#roomsPanelRendered)
      *
      * The various plugins might also provide promises, and they do this by using the
@@ -1495,7 +749,7 @@ _converse.api = {
      * @namespace _converse.api.promises
      * @memberOf _converse.api
      */
-    'promises': {
+    promises: {
         /**
          * By calling `promises.add`, a new [Promise](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)
          * is made available for other code or plugins to depend on via the
@@ -1504,42 +758,22 @@ _converse.api = {
          * Generally, it's the responsibility of the plugin which adds the promise to
          * also resolve it.
          *
-         * This is done by calling {@link _converse.api.emit}, which not only resolves the
+         * This is done by calling {@link _converse.api.trigger}, which not only resolves the
          * promise, but also emits an event with the same name (which can be listened to
          * via {@link _converse.api.listen}).
          *
          * @method _converse.api.promises.add
          * @param {string|array} [name|names] The name or an array of names for the promise(s) to be added
+         * @param {boolean} [replace=true] Whether this promise should be replaced with a new one when the user logs out.
          * @example _converse.api.promises.add('foo-completed');
          */
-        'add' (promises) {
-            promises = _.isArray(promises) ? promises : [promises]
-            _.each(promises, addPromise);
-        }
-    },
-
-    /**
-     * This namespace lets you access the BOSH tokens
-     *
-     * @namespace _converse.api.tokens
-     * @memberOf _converse.api
-     */
-    'tokens': {
-        /**
-         * @method _converse.api.tokens.get
-         * @param {string} [id] The type of token to return ('rid' or 'sid').
-         * @returns 'string' A token, either the RID or SID token depending on what's asked for.
-         * @example _converse.api.tokens.get('rid');
-         */
-        'get' (id) {
-            if (!_converse.expose_rid_and_sid || _.isUndefined(_converse.connection)) {
-                return null;
-            }
-            if (id.toLowerCase() === 'rid') {
-                return _converse.connection.rid || _converse.connection._proto.rid;
-            } else if (id.toLowerCase() === 'sid') {
-                return _converse.connection.sid || _converse.connection._proto.sid;
-            }
+        add (promises, replace=true) {
+            promises = Array.isArray(promises) ? promises : [promises];
+            promises.forEach(name => {
+                const promise = u.getResolveablePromise();
+                promise.replace = replace;
+                _converse.promises[name] = promise;
+            });
         }
     },
 
@@ -1552,56 +786,48 @@ _converse.api = {
      * @namespace _converse.api.listen
      * @memberOf _converse
      */
-    'listen': {
+    listen: {
         /**
          * Lets you listen to an event exactly once.
-         *
          * @method _converse.api.listen.once
          * @param {string} name The event's name
          * @param {function} callback The callback method to be called when the event is emitted.
          * @param {object} [context] The value of the `this` parameter for the callback.
          * @example _converse.api.listen.once('message', function (messageXML) { ... });
          */
-        'once': _converse.once.bind(_converse),
+        once: _converse.once.bind(_converse),
 
         /**
          * Lets you subscribe to an event.
-         *
          * Every time the event fires, the callback method specified by `callback` will be called.
-         *
          * @method _converse.api.listen.on
          * @param {string} name The event's name
          * @param {function} callback The callback method to be called when the event is emitted.
          * @param {object} [context] The value of the `this` parameter for the callback.
          * @example _converse.api.listen.on('message', function (messageXML) { ... });
          */
-        'on': _converse.on.bind(_converse),
+        on: _converse.on.bind(_converse),
 
         /**
          * To stop listening to an event, you can use the `not` method.
-         *
-         * Every time the event fires, the callback method specified by `callback` will be called.
-         *
          * @method _converse.api.listen.not
          * @param {string} name The event's name
          * @param {function} callback The callback method that is to no longer be called when the event fires
          * @example _converse.api.listen.not('message', function (messageXML);
          */
-        'not': _converse.off.bind(_converse),
+        not: _converse.off.bind(_converse),
 
         /**
          * Subscribe to an incoming stanza
-         *
-         * Every a matched stanza is received, the callback method specified by `callback` will be called.
-         *
+         * Every a matched stanza is received, the callback method specified by
+         * `callback` will be called.
          * @method _converse.api.listen.stanza
          * @param {string} name The stanza's name
-         * @param {object} options Matching options
-         * (e.g. 'ns' for namespace, 'type' for stanza type, also 'id' and 'from');
+         * @param {object} options Matching options (e.g. 'ns' for namespace, 'type' for stanza type, also 'id' and 'from');
          * @param {function} handler The callback method to be called when the stanza appears
          */
-        'stanza' (name, options, handler) {
-            if (_.isFunction(options)) {
+        stanza (name, options, handler) {
+            if (isFunction(options)) {
                 handler = options;
                 options = {};
             } else {
@@ -1616,28 +842,34 @@ _converse.api = {
                 options.from,
                 options
             );
-        },
+        }
     },
 
     /**
-     * Wait until a promise is resolved
-     *
+     * Wait until a promise is resolved or until the passed in function returns
+     * a truthy value.
      * @method _converse.api.waitUntil
-     * @param {string} name The name of the promise
+     * @param {string|function} condition - The name of the promise to wait for,
+     * or a function which should eventually return a truthy value.
      * @returns {Promise}
      */
-    'waitUntil' (name) {
-        const promise = _converse.promises[name];
-        if (_.isUndefined(promise)) {
-            return null;
+    waitUntil (condition) {
+        if (isFunction(condition)) {
+            return u.waitUntil(condition);
+        } else {
+            const promise = _converse.promises[condition];
+            if (promise === undefined) {
+                return null;
+            }
+            return promise;
         }
-        return promise;
     },
 
     /**
      * Allows you to send XML stanzas.
-     *
      * @method _converse.api.send
+     * @param {XMLElement} stanza
+     * @return {void}
      * @example
      * const msg = converse.env.$msg({
      *     'from': 'juliet@example.com/balcony',
@@ -1646,25 +878,596 @@ _converse.api = {
      * });
      * _converse.api.send(msg);
      */
-    'send' (stanza) {
-        _converse.connection.send(stanza);
-        _converse.emit('send', stanza);
+    send (stanza) {
+        if (!api.connection.connected()) {
+            log.warn("Not sending stanza because we're not connected!");
+            log.warn(Strophe.serialize(stanza));
+            return;
+        }
+        if (typeof stanza === 'string') {
+            stanza = u.toStanza(stanza);
+        }
+        if (stanza.tagName === 'iq') {
+            return api.sendIQ(stanza);
+        } else {
+            _converse.connection.send(stanza);
+            api.trigger('send', stanza);
+        }
     },
 
     /**
-     * Send an IQ stanza and receive a promise
-     *
+     * Send an IQ stanza
      * @method _converse.api.sendIQ
-     * @returns {Promise} A promise which resolves when we receive a `result` stanza
-     * or is rejected when we receive an `error` stanza.
+     * @param {XMLElement} stanza
+     * @param {Integer} [timeout=_converse.STANZA_TIMEOUT]
+     * @param {Boolean} [reject=true] - Whether an error IQ should cause the promise
+     *  to be rejected. If `false`, the promise will resolve instead of being rejected.
+     * @returns {Promise} A promise which resolves (or potentially rejected) once we
+     *  receive a `result` or `error` stanza or once a timeout is reached.
+     *  If the IQ stanza being sent is of type `result` or `error`, there's
+     *  nothing to wait for, so an already resolved promise is returned.
      */
-    'sendIQ' (stanza, timeout) {
-        return new Promise((resolve, reject) => {
-            _converse.connection.sendIQ(stanza, resolve, reject, timeout || _converse.IQ_TIMEOUT);
-            _converse.emit('send', stanza);
-        });
+    sendIQ (stanza, timeout=_converse.STANZA_TIMEOUT, reject=true) {
+        let promise;
+        stanza = stanza?.nodeTree ?? stanza;
+        if (['get', 'set'].includes(stanza.getAttribute('type'))) {
+            timeout = timeout || _converse.STANZA_TIMEOUT;
+            if (reject) {
+                promise = new Promise((resolve, reject) => _converse.connection.sendIQ(stanza, resolve, reject, timeout));
+                promise.catch(e => {
+                    if (e === null) {
+                        throw new TimeoutError(
+                            `Timeout error after ${timeout}ms for the following IQ stanza: ${Strophe.serialize(stanza)}`
+                        );
+                    }
+                });
+            } else {
+                promise = new Promise(resolve => _converse.connection.sendIQ(stanza, resolve, resolve, timeout));
+            }
+        } else {
+            _converse.connection.sendIQ(stanza);
+            promise = Promise.resolve();
+        }
+        api.trigger('send', stanza);
+        return promise;
     }
 };
+
+
+function replacePromise (name) {
+    const existing_promise = _converse.promises[name];
+    if (!existing_promise) {
+        throw new Error(`Tried to replace non-existing promise: ${name}`);
+    }
+    if (existing_promise.replace) {
+        const promise = u.getResolveablePromise();
+        promise.replace = existing_promise.replace;
+        _converse.promises[name] = promise;
+    } else {
+        log.debug(`Not replacing promise "${name}"`);
+    }
+}
+
+_converse.isUniView = function () {
+    /* We distinguish between UniView and MultiView instances.
+     *
+     * UniView means that only one chat is visible, even though there might be multiple ongoing chats.
+     * MultiView means that multiple chats may be visible simultaneously.
+     */
+    return ['mobile', 'fullscreen', 'embedded'].includes(api.settings.get("view_mode"));
+};
+
+
+async function initSessionStorage () {
+    await Storage.sessionStorageInitialized;
+    _converse.storage = {
+        'session': Storage.localForage.createInstance({
+            'name': _converse.isTestEnv() ? 'converse-test-session' : 'converse-session',
+            'description': 'sessionStorage instance',
+            'driver': ['sessionStorageWrapper']
+        })
+    };
+}
+
+
+function initPersistentStorage () {
+    if (api.settings.get('persistent_store') === 'sessionStorage') {
+        return;
+    } else if (_converse.api.settings.get("persistent_store") === 'BrowserExtLocal') {
+        Storage.localForage.defineDriver(localDriver).then(
+            () => Storage.localForage.setDriver('webExtensionLocalStorage')
+        );
+        _converse.storage['persistent'] = Storage.localForage;
+        return;
+
+    } else if (_converse.api.settings.get("persistent_store") === 'BrowserExtSync') {
+        Storage.localForage.defineDriver(syncDriver).then(
+            () => Storage.localForage.setDriver('webExtensionSyncStorage')
+        );
+        _converse.storage['persistent'] = Storage.localForage;
+        return;
+    }
+
+    const config = {
+        'name': _converse.isTestEnv() ? 'converse-test-persistent' : 'converse-persistent',
+        'storeName': _converse.bare_jid
+    }
+    if (_converse.api.settings.get("persistent_store") === 'localStorage') {
+        config['description'] = 'localStorage instance';
+        config['driver'] = [Storage.localForage.LOCALSTORAGE];
+    } else if (_converse.api.settings.get("persistent_store") === 'IndexedDB') {
+        config['description'] = 'indexedDB instance';
+        config['driver'] = [Storage.localForage.INDEXEDDB];
+    }
+    _converse.storage['persistent'] = Storage.localForage.createInstance(config);
+}
+
+
+_converse.getDefaultStore = function () {
+    if (_converse.config.get('trusted')) {
+        const is_non_persistent = api.settings.get('persistent_store') === 'sessionStorage';
+        return is_non_persistent ? 'session': 'persistent';
+    } else {
+        return 'session';
+    }
+}
+
+
+function createStore (id, storage) {
+    const s = _converse.storage[storage || _converse.getDefaultStore()];
+    return new Storage(id, s);
+}
+
+_converse.createStore = createStore;
+
+
+function initPlugins () {
+    // If initialize gets called a second time (e.g. during tests), then we
+    // need to re-apply all plugins (for a new converse instance), and we
+    // therefore need to clear this array that prevents plugins from being
+    // initialized twice.
+    // If initialize is called for the first time, then this array is empty
+    // in any case.
+    _converse.pluggable.initialized_plugins = [];
+    const whitelist = CORE_PLUGINS.concat(_converse.api.settings.get("whitelisted_plugins"));
+
+    if (_converse.api.settings.get("singleton")) {
+        [
+            'converse-bookmarks',
+            'converse-controlbox',
+            'converse-headline',
+            'converse-register'
+        ].forEach(name => _converse.api.settings.get("blacklisted_plugins").push(name));
+    }
+
+    _converse.pluggable.initializePlugins(
+        { '_converse': _converse },
+        whitelist,
+        _converse.api.settings.get("blacklisted_plugins")
+    );
+
+    /**
+     * Triggered once all plugins have been initialized. This is a useful event if you want to
+     * register event handlers but would like your own handlers to be overridable by
+     * plugins. In that case, you need to first wait until all plugins have been
+     * initialized, so that their overrides are active. One example where this is used
+     * is in [converse-notifications.js](https://github.com/jcbrand/converse.js/blob/master/src/converse-notification.js)`.
+     *
+     * Also available as an [ES2015 Promise](http://es6-features.org/#PromiseUsage)
+     * which can be listened to with `_converse.api.waitUntil`.
+     *
+     * @event _converse#pluginsInitialized
+     * @memberOf _converse
+     * @example _converse.api.listen.on('pluginsInitialized', () => { ... });
+     */
+    _converse.api.trigger('pluginsInitialized');
+}
+
+
+async function initClientConfig () {
+    /* The client config refers to configuration of the client which is
+     * independent of any particular user.
+     * What this means is that config values need to persist across
+     * user sessions.
+     */
+    const id = 'converse.client-config';
+    _converse.config = new Model({ id, 'trusted': true });
+    _converse.config.browserStorage = createStore(id, "session");
+    await new Promise(r => _converse.config.fetch({'success': r, 'error': r}));
+    /**
+     * Triggered once the XMPP-client configuration has been initialized.
+     * The client configuration is independent of any particular and its values
+     * persist across user sessions.
+     *
+     * @event _converse#clientConfigInitialized
+     * @example
+     * _converse.api.listen.on('clientConfigInitialized', () => { ... });
+     */
+    _converse.api.trigger('clientConfigInitialized');
+}
+
+
+export async function tearDown () {
+    await _converse.api.trigger('beforeTearDown', {'synchronous': true});
+    window.removeEventListener('click', _converse.onUserActivity);
+    window.removeEventListener('focus', _converse.onUserActivity);
+    window.removeEventListener('keypress', _converse.onUserActivity);
+    window.removeEventListener('mousemove', _converse.onUserActivity);
+    window.removeEventListener(_converse.unloadevent, _converse.onUserActivity);
+    window.clearInterval(_converse.everySecondTrigger);
+    _converse.api.trigger('afterTearDown');
+    return _converse;
+}
+
+
+async function attemptNonPreboundSession (credentials, automatic) {
+    const { api } = _converse;
+    if (api.settings.get("authentication") === _converse.LOGIN) {
+        // XXX: If EITHER ``keepalive`` or ``auto_login`` is ``true`` and
+        // ``authentication`` is set to ``login``, then Converse will try to log the user in,
+        // since we don't have a way to distinguish between wether we're
+        // restoring a previous session (``keepalive``) or whether we're
+        // automatically setting up a new session (``auto_login``).
+        // So we can't do the check (!automatic || _converse.api.settings.get("auto_login")) here.
+        if (credentials) {
+            connect(credentials);
+        } else if (_converse.api.settings.get("credentials_url")) {
+            // We give credentials_url preference, because
+            // _converse.connection.pass might be an expired token.
+            connect(await getLoginCredentials());
+        } else if (_converse.jid && (_converse.api.settings.get("password") || _converse.connection.pass)) {
+            connect();
+        } else if (!_converse.isTestEnv() && 'credentials' in navigator) {
+            connect(await getLoginCredentialsFromBrowser());
+        } else {
+            !_converse.isTestEnv() && log.warn("attemptNonPreboundSession: Couldn't find credentials to log in with");
+        }
+    } else if ([_converse.ANONYMOUS, _converse.EXTERNAL].includes(_converse.api.settings.get("authentication")) && (!automatic || _converse.api.settings.get("auto_login"))) {
+        connect();
+    }
+}
+
+
+function connect (credentials) {
+    if ([_converse.ANONYMOUS, _converse.EXTERNAL].includes(_converse.api.settings.get("authentication"))) {
+        if (!_converse.jid) {
+            throw new Error("Config Error: when using anonymous login " +
+                "you need to provide the server's domain via the 'jid' option. " +
+                "Either when calling converse.initialize, or when calling " +
+                "_converse.api.user.login.");
+        }
+        if (!_converse.connection.reconnecting) {
+            _converse.connection.reset();
+        }
+        _converse.connection.connect(_converse.jid.toLowerCase());
+    } else if (_converse.api.settings.get("authentication") === _converse.LOGIN) {
+        const password = credentials ? credentials.password : (_converse.connection?.pass || _converse.api.settings.get("password"));
+        if (!password) {
+            if (_converse.api.settings.get("auto_login")) {
+                throw new Error("autoLogin: If you use auto_login and "+
+                    "authentication='login' then you also need to provide a password.");
+            }
+            _converse.connection.setDisconnectionCause(Strophe.Status.AUTHFAIL, undefined, true);
+            _converse.api.connection.disconnect();
+            return;
+        }
+        if (!_converse.connection.reconnecting) {
+            _converse.connection.reset();
+        }
+        _converse.connection.connect(_converse.jid, password);
+    }
+}
+
+
+_converse.shouldClearCache = () => (
+    !_converse.config.get('trusted') ||
+    api.settings.get('clear_cache_on_logout') ||
+    _converse.isTestEnv()
+);
+
+
+export function clearSession  () {
+    _converse.session?.destroy();
+    delete _converse.session;
+    _converse.shouldClearCache() && _converse.api.user.settings.clear();
+    /**
+     * Synchronouse event triggered once the user session has been cleared,
+     * for example when the user has logged out or when Converse has
+     * disconnected for some other reason.
+     * @event _converse#clearSession
+     */
+    return _converse.api.trigger('clearSession', {'synchronous': true});
+}
+
+
+_converse.initConnection = function () {
+    const api = _converse.api;
+
+    if (! api.settings.get('bosh_service_url')) {
+        if (api.settings.get("authentication") === _converse.PREBIND) {
+            throw new Error("authentication is set to 'prebind' but we don't have a BOSH connection");
+        }
+        if (! api.settings.get("websocket_url")) {
+            throw new Error("initConnection: you must supply a value for either the bosh_service_url or websocket_url or both.");
+        }
+    }
+
+    const XMPPConnection = _converse.isTestEnv() ? MockConnection : Connection;
+    if (('WebSocket' in window || 'MozWebSocket' in window) && api.settings.get("websocket_url")) {
+        _converse.connection = new XMPPConnection(
+            api.settings.get("websocket_url"),
+            Object.assign(_converse.default_connection_options, api.settings.get("connection_options"))
+        );
+    } else if (api.settings.get('bosh_service_url')) {
+        _converse.connection = new XMPPConnection(
+            api.settings.get('bosh_service_url'),
+            Object.assign(
+                _converse.default_connection_options,
+                api.settings.get("connection_options"),
+                {'keepalive': api.settings.get("keepalive")}
+            )
+        );
+    } else {
+        throw new Error("initConnection: this browser does not support "+
+                        "websockets and bosh_service_url wasn't specified.");
+    }
+    setUpXMLLogging();
+    /**
+     * Triggered once the `Connection` constructor has been initialized, which
+     * will be responsible for managing the connection to the XMPP server.
+     *
+     * @event _converse#connectionInitialized
+     */
+    api.trigger('connectionInitialized');
+}
+
+
+async function initSession (jid) {
+    const is_shared_session = api.settings.get('connection_options').worker;
+
+    const bare_jid = Strophe.getBareJidFromJid(jid).toLowerCase();
+    const id = `converse.session-${bare_jid}`;
+    if (_converse.session?.get('id') !== id) {
+        _converse.session = new Model({id});
+        _converse.session.browserStorage = createStore(id, is_shared_session ? "persistent" : "session");
+        await new Promise(r => _converse.session.fetch({'success': r, 'error': r}));
+
+        if (!is_shared_session && _converse.session.get('active')) {
+            // If the `active` flag is set, it means this tab was cloned from
+            // another (e.g. via middle-click), and its session data was copied over.
+            _converse.session.clear();
+            _converse.session.save({id});
+        }
+        saveJIDtoSession(jid);
+        initPersistentStorage();
+        /**
+         * Triggered once the user's session has been initialized. The session is a
+         * cache which stores information about the user's current session.
+         * @event _converse#userSessionInitialized
+         * @memberOf _converse
+         */
+        _converse.api.trigger('userSessionInitialized');
+    } else {
+        saveJIDtoSession(jid);
+    }
+}
+
+
+function saveJIDtoSession (jid) {
+    jid = _converse.session.get('jid') || jid;
+    if (_converse.api.settings.get("authentication") !== _converse.ANONYMOUS && !Strophe.getResourceFromJid(jid)) {
+        jid = jid.toLowerCase() + Connection.generateResource();
+    }
+    _converse.jid = jid;
+    _converse.bare_jid = Strophe.getBareJidFromJid(jid);
+    _converse.resource = Strophe.getResourceFromJid(jid);
+    _converse.domain = Strophe.getDomainFromJid(jid);
+    _converse.session.save({
+       'jid': jid,
+       'bare_jid': _converse.bare_jid,
+       'resource': _converse.resource,
+       'domain': _converse.domain,
+        // We use the `active` flag to determine whether we should use the values from sessionStorage.
+        // When "cloning" a tab (e.g. via middle-click), the `active` flag will be set and we'll create
+        // a new empty user session, otherwise it'll be false and we can re-use the user session.
+       'active': true
+    });
+    // Set JID on the connection object so that when we call `connection.bind`
+    // the new resource is found by Strophe.js and sent to the XMPP server.
+    _converse.connection.jid = jid;
+}
+
+
+/**
+ * Stores the passed in JID for the current user, potentially creating a
+ * resource if the JID is bare.
+ *
+ * Given that we can only create an XMPP connection if we know the domain of
+ * the server connect to and we only know this once we know the JID, we also
+ * call {@link _converse.initConnection } (if necessary) to make sure that the
+ * connection is set up.
+ *
+ * @method _converse#setUserJID
+ * @emits _converse#setUserJID
+ * @params { String } jid
+ */
+_converse.setUserJID = async function (jid) {
+    await initSession(jid);
+    /**
+     * Triggered whenever the user's JID has been updated
+     * @event _converse#setUserJID
+     */
+    _converse.api.trigger('setUserJID');
+    return jid;
+}
+
+
+function setUpXMLLogging () {
+    const lmap = {}
+    lmap[Strophe.LogLevel.DEBUG] = 'debug';
+    lmap[Strophe.LogLevel.INFO] = 'info';
+    lmap[Strophe.LogLevel.WARN] = 'warn';
+    lmap[Strophe.LogLevel.ERROR] = 'error';
+    lmap[Strophe.LogLevel.FATAL] = 'fatal';
+
+    Strophe.log = (level, msg) => log.log(msg, lmap[level]);
+    Strophe.error = (msg) => log.error(msg);
+
+    _converse.connection.xmlInput = body => log.debug(body.outerHTML, 'color: darkgoldenrod');
+    _converse.connection.xmlOutput = body => log.debug(body.outerHTML, 'color: darkcyan');
+}
+
+async function getLoginCredentials () {
+    let credentials;
+    let wait = 0;
+    while (!credentials) {
+        try {
+            credentials = await fetchLoginCredentials(wait); // eslint-disable-line no-await-in-loop
+        } catch (e) {
+            log.error('Could not fetch login credentials');
+            log.error(e);
+        }
+        // If unsuccessful, we wait 2 seconds between subsequent attempts to
+        // fetch the credentials.
+        wait = 2000;
+    }
+    return credentials;
+}
+
+async function getLoginCredentialsFromBrowser () {
+    try {
+        const creds = await navigator.credentials.get({'password': true});
+        if (creds && creds.type == 'password' && u.isValidJID(creds.id)) {
+            await _converse.setUserJID(creds.id);
+            return {'jid': creds.id, 'password': creds.password};
+        }
+    } catch (e) {
+        log.error(e);
+    }
+}
+
+
+// Make sure everything is reset in case this is a subsequent call to
+// converse.initialize (happens during tests).
+async function cleanup () {
+    await api.trigger('cleanup', {'synchronous': true});
+    _converse.router.history.stop();
+    unregisterGlobalEventHandlers();
+    _converse.connection?.reset();
+    _converse.stopListening();
+    _converse.off();
+    if (_converse.promises['initialized'].isResolved) {
+        api.promises.add('initialized')
+    }
+}
+
+
+function fetchLoginCredentials (wait=0) {
+    return new Promise(
+        debounce((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', api.settings.get("credentials_url"), true);
+            xhr.setRequestHeader('Accept', 'application/json, text/javascript');
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 400) {
+                    const data = JSON.parse(xhr.responseText);
+                    _converse.setUserJID(data.jid).then(() => {
+                        resolve({
+                            jid: data.jid,
+                            password: data.password
+                        });
+                    });
+                } else {
+                    reject(new Error(`${xhr.status}: ${xhr.responseText}`));
+                }
+            };
+            xhr.onerror = reject;
+            xhr.send();
+        }, wait)
+    );
+}
+
+
+_converse.saveWindowState = function (ev) {
+    // XXX: eventually we should be able to just use
+    // document.visibilityState (when we drop support for older
+    // browsers).
+    let state;
+    const event_map = {
+        'focus': "visible",
+        'focusin': "visible",
+        'pageshow': "visible",
+        'blur': "hidden",
+        'focusout': "hidden",
+        'pagehide': "hidden"
+    };
+    ev = ev || document.createEvent('Events');
+    if (ev.type in event_map) {
+        state = event_map[ev.type];
+    } else {
+        state = document.hidden ? "hidden" : "visible";
+    }
+    _converse.windowState = state;
+    /**
+        * Triggered when window state has changed.
+        * Used to determine when a user left the page and when came back.
+        * @event _converse#windowStateChanged
+        * @type { object }
+        * @property{ string } state - Either "hidden" or "visible"
+        * @example _converse.api.listen.on('windowStateChanged', obj => { ... });
+        */
+    api.trigger('windowStateChanged', {state});
+}
+
+
+function registerGlobalEventHandlers () {
+    document.addEventListener("visibilitychange", _converse.saveWindowState);
+    _converse.saveWindowState({'type': document.hidden ? "blur" : "focus"}); // Set initial state
+    /**
+     * Called once Converse has registered its global event handlers
+     * (for events such as window resize or unload).
+     * Plugins can listen to this event as cue to register their own
+     * global event handlers.
+     * @event _converse#registeredGlobalEventHandlers
+     * @example _converse.api.listen.on('registeredGlobalEventHandlers', () => { ... });
+     */
+    api.trigger('registeredGlobalEventHandlers');
+}
+
+
+function unregisterGlobalEventHandlers () {
+    document.removeEventListener("visibilitychange", _converse.saveWindowState);
+    api.trigger('unregisteredGlobalEventHandlers');
+}
+
+
+_converse.ConnectionFeedback = Model.extend({
+    defaults: {
+        'connection_status': Strophe.Status.DISCONNECTED,
+        'message': ''
+    },
+    initialize () {
+        this.on('change', () => api.trigger('connfeedback', _converse.connfeedback));
+    }
+});
+
+
+function setUnloadEvent () {
+    if ('onpagehide' in window) {
+        // Pagehide gets thrown in more cases than unload. Specifically it
+        // gets thrown when the page is cached and not just
+        // closed/destroyed. It's the only viable event on mobile Safari.
+        // https://www.webkit.org/blog/516/webkit-page-cache-ii-the-unload-event/
+        _converse.unloadevent = 'pagehide';
+    } else if ('onbeforeunload' in window) {
+        _converse.unloadevent = 'beforeunload';
+    } else if ('onunload' in window) {
+        _converse.unloadevent = 'unload';
+    }
+}
+
+export const converse = window.converse || {};
+
 
 /**
  * ### The Public API
@@ -1676,53 +1479,123 @@ _converse.api = {
  * or closured data. To do that, you’ll need to create a plugin, which has
  * access to the private API method.
  *
+ * @global
  * @namespace converse
  */
-const converse = {
+Object.assign(converse, {
+
+    CHAT_STATES: ['active', 'composing', 'gone', 'inactive', 'paused'],
+
+    keycodes: {
+        TAB: 9,
+        ENTER: 13,
+        SHIFT: 16,
+        CTRL: 17,
+        ALT: 18,
+        ESCAPE: 27,
+        LEFT_ARROW: 37,
+        UP_ARROW: 38,
+        RIGHT_ARROW: 39,
+        DOWN_ARROW: 40,
+        FORWARD_SLASH: 47,
+        AT: 50,
+        META: 91,
+        META_RIGHT: 93
+    },
+
     /**
      * Public API method which initializes Converse.
      * This method must always be called when using Converse.
-     *
+     * @async
      * @memberOf converse
      * @method initialize
      * @param {object} config A map of [configuration-settings](https://conversejs.org/docs/html/configuration.html#configuration-settings).
-     *
      * @example
      * converse.initialize({
      *     auto_list_rooms: false,
      *     auto_subscribe: false,
      *     bosh_service_url: 'https://bind.example.com',
      *     hide_muc_server: false,
-     *     i18n: locales['en'],
-     *     keepalive: true,
+     *     i18n: 'en',
      *     play_sounds: true,
-     *     prebind: false,
      *     show_controlbox_by_default: true,
      *     debug: false,
      *     roster_groups: true
      * });
      */
-    'initialize' (settings, callback) {
-        return _converse.initialize(settings, callback);
+    async initialize (settings) {
+        await cleanup();
+
+        setUnloadEvent();
+        initSettings(settings);
+        _converse.strict_plugin_dependencies = settings.strict_plugin_dependencies; // Needed by pluggable.js
+        log.setLogLevel(api.settings.get("loglevel"));
+
+        if (api.settings.get("authentication") === _converse.ANONYMOUS) {
+            if (api.settings.get("auto_login") && !api.settings.get('jid')) {
+                throw new Error("Config Error: you need to provide the server's " +
+                      "domain via the 'jid' option when using anonymous " +
+                      "authentication with auto_login.");
+            }
+        }
+        _converse.router.route(
+            /^converse\?loglevel=(debug|info|warn|error|fatal)$/, 'loglevel',
+            l => log.setLogLevel(l)
+        );
+        _converse.connfeedback = new _converse.ConnectionFeedback();
+
+        /* When reloading the page:
+         * For new sessions, we need to send out a presence stanza to notify
+         * the server/network that we're online.
+         * When re-attaching to an existing session we don't need to again send out a presence stanza,
+         * because it's as if "we never left" (see onConnectStatusChanged).
+         * https://github.com/conversejs/converse.js/issues/521
+         */
+        _converse.send_initial_presence = true;
+
+        await initSessionStorage();
+        await initClientConfig();
+        await i18n.initialize();
+        initPlugins();
+        registerGlobalEventHandlers();
+
+        !History.started && _converse.router.history.start();
+
+        if (api.settings.get("idle_presence_timeout") > 0) {
+            api.listen.on('addClientFeatures', () => api.disco.own.features.add(Strophe.NS.IDLE));
+        }
+
+        const plugins = _converse.pluggable.plugins
+        if (api.settings.get("auto_login") || api.settings.get("keepalive") && invoke(plugins['converse-bosh'], 'enabled')) {
+            await api.user.login(null, null, true);
+        }
+
+        /**
+         * Triggered once converse.initialize has finished.
+         * @event _converse#initialized
+         */
+        api.trigger('initialized');
+
+        if (_converse.isTestEnv()) {
+            return _converse;
+        }
     },
+
     /**
      * Exposes methods for adding and removing plugins. You'll need to write a plugin
      * if you want to have access to the private API methods defined further down below.
      *
      * For more information on plugins, read the documentation on [writing a plugin](/docs/html/plugin_development.html).
-     *
      * @namespace plugins
      * @memberOf converse
      */
-    'plugins': {
-        /** Registers a new plugin.
-         *
+    plugins: {
+        /**
+         * Registers a new plugin.
          * @method converse.plugins.add
          * @param {string} name The name of the plugin
          * @param {object} plugin The plugin object
-         *
          * @example
-         *
          *  const plugin = {
          *      initialize: function () {
          *          // Gets called as soon as the plugin has been loaded.
@@ -1736,12 +1609,12 @@ const converse = {
          *  }
          *  converse.plugins.add('myplugin', plugin);
          */
-        'add' (name, plugin) {
+        add (name, plugin) {
             plugin.__name__ = name;
-            if (!_.isUndefined(_converse.pluggable.plugins[name])) {
+            if (_converse.pluggable.plugins[name] !== undefined) {
                 throw new TypeError(
-                    `Error: plugin with name "${name}" has already been `+
-                    'registered!');
+                    `Error: plugin with name "${name}" has already been ` + 'registered!'
+                );
             } else {
                 _converse.pluggable.plugins[name] = plugin;
             }
@@ -1750,38 +1623,48 @@ const converse = {
     },
     /**
      * Utility methods and globals from bundled 3rd party libraries.
-     * @memberOf converse
-     *
+     * @typedef ConverseEnv
      * @property {function} converse.env.$build    - Creates a Strophe.Builder, for creating stanza objects.
      * @property {function} converse.env.$iq       - Creates a Strophe.Builder with an <iq/> element as the root.
      * @property {function} converse.env.$msg      - Creates a Strophe.Builder with an <message/> element as the root.
      * @property {function} converse.env.$pres     - Creates a Strophe.Builder with an <presence/> element as the root.
-     * @property {object} converse.env.Backbone    - The [Backbone](http://backbonejs.org) object used by Converse to create models and views.
      * @property {function} converse.env.Promise   - The Promise implementation used by Converse.
      * @property {function} converse.env.Strophe   - The [Strophe](http://strophe.im/strophejs) XMPP library used by Converse.
-     * @property {object} converse.env._           - The instance of [lodash](http://lodash.com) used by Converse.
      * @property {function} converse.env.f         - And instance of Lodash with its methods wrapped to produce immutable auto-curried iteratee-first data-last methods.
-     * @property {function} converse.env.b64_sha1  - Utility method from Strophe for creating base64 encoded sha1 hashes.
-     * @property {object} converse.env.moment      - [Moment](https://momentjs.com) date manipulation library.
      * @property {function} converse.env.sizzle    - [Sizzle](https://sizzlejs.com) CSS selector engine.
+     * @property {function} converse.env.sprintf
+     * @property {object} converse.env._           - The instance of [lodash-es](http://lodash.com) used by Converse.
+     * @property {object} converse.env.dayjs       - [DayJS](https://github.com/iamkun/dayjs) date manipulation library.
      * @property {object} converse.env.utils       - Module containing common utility methods used by Converse.
+     * @memberOf converse
      */
     'env': {
-        '$build': $build,
-        '$iq': $iq,
-        '$msg': $msg,
-        '$pres': $pres,
-        'Backbone': Backbone,
-        'Promise': Promise,
-        'Strophe': Strophe,
-        '_': _,
-        'f': f,
-        'b64_sha1':  b64_sha1,
-        'moment': moment,
-        'sizzle': sizzle,
-        'utils': u
+        $build,
+        $iq,
+        $msg,
+        $pres,
+        'utils': u,
+        Collection,
+        CustomElement,
+        Model,
+        Promise,
+        Strophe,
+        dayjs,
+        html,
+        log,
+        sizzle,
+        sprintf,
+        stanza_utils,
+        u,
     }
-};
-window.converse = converse;
-window.dispatchEvent(new CustomEvent('converse-loaded'));
-export default converse;
+});
+
+/**
+ * Once Converse.js has loaded, it'll dispatch a custom event with the name `converse-loaded`.
+ * You can listen for this event in order to be informed as soon as converse.js has been
+ * loaded and parsed, which would mean it's safe to call `converse.initialize`.
+ * @event converse-loaded
+ * @example window.addEventListener('converse-loaded', () => converse.initialize());
+ */
+const ev = new CustomEvent('converse-loaded', {'detail': { converse }});
+window.dispatchEvent(ev);

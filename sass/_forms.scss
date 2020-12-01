@@ -5,6 +5,14 @@
     }
 
     form {
+        .hidden-username {
+            opacity: 0 !important;
+            height: 0 !important;
+            padding: 0 !important;
+        }
+        .error-feedback {
+            margin-bottom: 0.5em;
+        }
         .form-check-label {
             margin-top: $form-check-input-margin-y;
         }
@@ -28,14 +36,17 @@
         }
 
         .clear-input {
+            margin-top: 0.5em;
+            margin-bottom : 0.5em;
             position: absolute;
             right: 0.2em;
             cursor: pointer;
-            font-size: 0.75rem;
+            font-size: var(--font-size);
         }
 
-        &#converse-register, 
+        &#converse-register,
         &#converse-login {
+            background: var(--controlbox-pane-background-color);
             legend {
                 width: 100%;
                 text-align: center;
@@ -61,7 +72,6 @@
 
 
         &.converse-form {
-            background: white;
             padding: 1.2rem;
             legend {
                 color: var(--text-color);
@@ -85,7 +95,6 @@
             input[type=submit] {
                 padding-left: 1em;
                 padding-right: 1em;
-                margin: 0.5em 0;
                 border: none;
             }
             input.error {
@@ -110,7 +119,12 @@
         }
 
         &.converse-centered-form {
+            min-height: 66%;
             text-align: center;
+            input {
+                max-width: 30em;
+                margin: auto;
+            }
         }
     }
 }

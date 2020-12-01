@@ -9,7 +9,7 @@
                 color: var(--link-color);
                 font-size: var(--font-size-large);
                 &:hover {
-                    color: var(--link-color-darken-20-percent);
+                    color: var(--link-hover-color);
                 }
                 i {
                     color: var(--link-color);
@@ -21,8 +21,7 @@
     }
 
     .set-xmpp-status,
-    .xmpp-status,
-    .roster-contacts {
+    .xmpp-status {
         .chat-status--online {
             color: var(--chat-status-online);
         }
@@ -35,6 +34,12 @@
         .far.fa-circle,
         .fa-times-circle {
             color: var(--subdued-color);
+        }
+    }
+
+    .set-xmpp-status {
+        .chat-status {
+            padding-right: 0.5em;
         }
     }
 
@@ -61,16 +66,31 @@
     }
 
     #controlbox {
+        order: -1;
+        color: var(--controlbox-text-color);
+
+        converse-brand-heading {
+            width: 100%;
+            display: block;
+        }
+
+        .brand-name-wrapper {
+            font-size: 200%;
+        }
+
+        .brand-name-wrapper--fullscreen {
+            font-size: 100%;
+        }
 
         .open-rooms-toggle, .open-rooms-toggle .fa {
-            color: var(--chatroom-head-color) !important;
+            color: var(--groupchats-header-color) !important;
             &:hover {
-                color: var(--chatroom-head-color-dark) !important;
+                color: var(--chatroom-head-bg-color-dark) !important;
             }
         }
 
         .box-flyout {
-            background-color: white;
+            background-color: var(--controlbox-pane-background-color);
         }
 
         margin-right: calc(3 * var(--chat-gutter));
@@ -103,7 +123,7 @@
 
         #converse-register {
             @include fade-in;
-            background: white;
+            background-color: var(--controlbox-pane-background-color);
             .title {
                 font-weight: bold;
             }
@@ -146,7 +166,7 @@
                 color: gray;
                 font-size: 85%;
                 &:hover {
-                    color: var(--text-color);
+                    color: var(--controlbox-text-color);
                 }
             }
         }
@@ -170,11 +190,7 @@
         }
 
         #converse-login-panel {
-            flex-direction: column;
-
-            .brand-heading {
-                color: var(--global-background-color);
-            }
+            flex-direction: row;
         }
 
         .toggle-register-login {
@@ -223,11 +239,15 @@
             }
 
             .controlbox-heading--groupchats {
-                color: var(--chatroom-head-color);
+                color: var(--groupchats-header-color);
             }
 
             .controlbox-heading--contacts {
                 color: var(--chat-head-color-dark);
+            }
+
+            .controlbox-heading--headline {
+                color: var(--headline-head-color);
             }
 
             .controlbox-heading__btn {
@@ -290,9 +310,10 @@
         }
 
         .controlbox-panes {
+            background-color: var(--controlbox-pane-background-color);
+            border-right: 0.2143rem solid var(--panel-divider-color);
             height: 100%;
             overflow-y: auto;
-            background-color: var(--controlbox-pane-background-color);
         }
 
         .controlbox-subtitle {
@@ -308,7 +329,7 @@
             left: 0;
             text-align: left;
             overflow-x: hidden;
-            padding: 1em 0 1em 0;
+            padding: 0 0 1em 0;
 
             .controlbox-padded {
                 padding-left: 1em;
@@ -356,8 +377,12 @@
             }
         }
     }
+}
 
+
+#conversejs.converse-overlayed {
     .toggle-controlbox {
+        order: -1;
         text-align: center;
         background-color: var(--link-color);
         border-top-left-radius: var(--button-border-radius);
@@ -371,12 +396,8 @@
             color: var(--inverse-link-color);
         }
     }
-}
 
-
-#conversejs.converse-overlayed {
     #controlbox {
-        order: -1;
         min-width: var(--controlbox-width) !important;
         width: var(--controlbox-width);
         .box-flyout {
@@ -398,18 +419,15 @@
             }
         }
 
-        .brand-heading-container {
-            width: 100%;
-        }
-
         .controlbox-head {
             display: flex;
             flex-direction: row-reverse;
             flex-wrap: nowrap;
             justify-content: space-between;
+            min-height: 0;
 
             .brand-heading {
-                color: var(--text-color);
+                color: var(--controlbox-text-color);
                 font-size: 2em;
             }
             .chatbox-btn {
@@ -435,6 +453,14 @@
     }
 }
 
+#conversejs.converse-embedded,
+#conversejs.converse-fullscreen{
+    .toggle-controlbox {
+        display: none;
+    }
+}
+
+#conversejs.converse-embedded,
 #conversejs.converse-fullscreen,
 #conversejs.converse-mobile {
     #controlbox {
@@ -475,7 +501,7 @@
             line-height: var(--line-height-huge);
         }
 
-        .brand-heading-container {
+        converse-brand-heading {
             @include make-col(12);
             margin-top: 5em;
             margin-bottom: 1em;
@@ -545,7 +571,7 @@
 
 @include media-breakpoint-down(sm) {
 
-    #conversejs:not(.converse-embedded)  {
+    #conversejs {
         left: 0;
         right: 0;
         padding-left: env(safe-area-inset-left);
@@ -560,15 +586,14 @@
                 font-size: 14px;
             }
 
-            .chatbox { 
+            .chatbox {
                 .box-flyout {
-                    margin-left: 15px; // Counteracts Bootstrap margins, but
-                                       // not clear why needed...
+                    margin-left: 15px; // Counteracts Bootstrap margins, but not clear why needed...
                     left: 0;
                     bottom: 0;
                     border-radius: 0;
                     width: 100vw !important;
-                    height: 100vh !important;
+                    height: var(--fullpage-chat-height);
                 }
             }
 
@@ -576,7 +601,8 @@
                 width: 100vw !important;
                 .box-flyout {
                     width: 100vw !important;
-                    height: 100vh !important;
+                    height: var(--fullpage-chat-height);
+                    margin-right: -15px;
                 }
                 .sidebar {
                     display: block;
@@ -597,6 +623,12 @@
     }
 }
 
+#conversejs.converse-fullscreen {
+    .controlbox-panes {
+        padding-top: 1em;
+    }
+}
+
 #conversejs.converse-overlayed {
     .brand-heading {
         padding-top: 0.8rem;
@@ -609,6 +641,9 @@
     #controlbox {
         #converse-login-panel {
             height: 100%;
+        }
+        .controlbox-panes {
+            margin-top: 0.5em;
         }
     }
 }

@@ -1,23 +1,358 @@
 # Changelog
 
-## 4.1.3 (Unreleased)
+## 8.0.0 (Unreleased)
 
-- Updated translation: lt
-- Upgrade to Backbone 1.4.0
-- Fix "flashing" of roster filter when you have less than 5 roster contacts.
-- Fix handling of CAPTCHAs offered by ejabberd.
+- #1083: Add support for XEP-0393 Message Styling
+- #2275: Allow punctuation to immediately precede a mention
+- Bugfix: `null` inserted by emoji picker and can't switch between skintones
+- New configuration setting: [show_tab_notifications](https://conversejs.org/docs/html/configuration.html#show-tab-notifications)
+
+### Breaking Changes
+
+The [afterMessageBodyTransformed](https://conversejs.org/docs/html/api/-_converse.html#event:afterMessageBodyTransformed) and [beforeMessageBodyTransformed](https://conversejs.org/docs/html/api/-_converse.html#event:beforeMessageBodyTransformed) events now has a different signatures.
+
+## 7.0.2 (2020-11-23)
+
+- Updated translations: de, nb, gl, tr
+- Still more necessary files not included in the 7.0.1 NPM package, causing `Module not found` errors.
+- #2337: Newly opened headline chat isn't hidden by default
+
+## 7.0.1 (2020-11-19)
+
+- Updated translations: de, es, fi, fr, gl, hu, nb_NO, oc, pl, pt, pt_BR, ru, tr, uk, zh
+- #2328: Honor `use_system_emojis` in emoji-picker
+- Not all template/*.js files were included in the 7.0.0 NPM package, causing:
+  `Module not found: Error: Can't resolve 'templates/*.js'`
+
+## 7.0.0 (2020-11-18)
+
+*Note for plugin authors:*
+configuration settings should now be accessed via `_converse.api.settings.get` and not directly on the `_converse` object.
+Soon we'll deprecate the latter, so prepare now.
+
+- #515 Add support for XEP-0050 Ad-Hoc commands
+- #1083 Add support for XEP-0393 Message Styling
+- #2231: add sort_by_query and remove sort_by_length
+- #1313: Stylistic improvements to the send button
+- #1481: MUC OMEMO: Error No record for device
+- #1490: Busy-loop when fetching registration form fails
+- #1535: Add option to destroy a MUC
+- #1715: Update chat state notification after receiving a message correction.
+- #1793: Send button doesn't appear in Firefox in 1:1 chats
+- #1820: Set focus on jid field after controlbox is loaded
+- #1822: Don't log error if user has no bookmarks
+- #1823: New config options [muc_roomid_policy](https://conversejs.org/docs/html/configuration.html#muc-roomid-policy)
+    and [muc_roomid_policy_hint](https://conversejs.org/docs/html/configuration.html#muc-roomid-policy-hint)
+- #1826: A user can now add himself as a contact
+- #1839: Headline messages are shown in controlbox
+- #1924: Configuring an ejabberd room fails
+- #1896: Don't send receipts for messages fetched from the archive
+- #1937: Editing a message removes the mentions highlight
+- #1963: Mentions are visually incorrect when used in message replies
+- #1999: Demarcate first unread message
+- #2002: fix rendering of `muc_roomid_policy_hint`
+- #2006: fix rendering of emojis in case `use_system_emojis == false`
+- #2028: Implement XEP-0333 `displayed` chat marker
+- #2101: Improve contrast of text in control box
+- #2187: Avoid merging initial settings with themselves every time settings are extended.
+- #2199: Fix BOSH session restore.
+- #2201: added html to converse.env
+- #2213: added CustomElement to converse.env
+- #2220: fix rendering of emojis in case `use_system_emojis == false` (again).
+- #2092: fixes room list update loop when having the `locked_muc_domain` truthy or `'hidden'`
+- #2285: Rename config option `muc_hats_from_vcard` to [muc_hats](https://conversejs.org/docs/html/configuration.html#muc-hats). Now accepts a list instead of a boolean and allows for more flexible choices regarding user badges.
+- #2300: Fix message reorder issue after message correction.
+- #2304: Custom emojis (stickers) images not shown
+- #2307: BootstrapModal is not accessible to plugins
+- #2308: Allow getHats method to be overriden in the `overrides` object in plugins.
+- #2321: When Converse runs inside a browser extension, enable browser sync and local storage for persistent storage
+- #1250: Change favicon color when unread messages
+- Updated translations: de, es, fi, fr, gl, hu, nb_NO, oc, pl, pt, pt_BR, ru, tr, uk, zh
+- The `trusted` configuration setting has been removed in favor of two new settings:
+    [allow_user_trust_override](https://conversejs.org/docs/html/configuration.html#allow-user-trust-override)
+    [clear_cache_on_logout](https://conversejs.org/docs/html/configuration.html#clear-cache-on-logout)
+- The `persistent_store` setting can now also be set to `sessionStorage`
+- The `api.archive.query` method no longer accepts an RSM instance as argument.
+- The plugin `converse-uniview` has been removed and its functionality merged into `converse-chatboxviews`
+- Removed the mockups from the project. Recommended to use tests instead.
+- The API method `api.settings.update` has been deprecated in favor of `api.settings.extend`.
+- The API methods under the `api.user.status` namespace are now asynchronous and need to be `await`ed.
+- Filter roster contacts via all available information (JID, nickname and VCard full name).
+- Allow ignoring of bootstrap modules at build using environment variable. For xample: `export BOOTSTRAP_IGNORE_MODULES="Modal,Dropdown" && make dist`
+- Bugfix. Handle stanza that clears the MUC subject
+- Replace Backbone with [Skeletor](https://github.com/skeletorjs/skeletor)
+- Start using [lit-html](https://lit-html.polymer-project.org/) instead of lodash for templating.
+- [muc_fetch_members](https://conversejs.org/docs/html/configuration.html#muc-fetch-members) now also accepts an array of affiliations to fetch.
+- Remove the configuration setting `muc_show_join_leave_status`. The optional status message is no longer shown at all.
+- Support for XEP-0156 is now enabled by default (which means that
+  [discover_connection_methods](https://conversejs.org/docs/html/configuration.html#discover-connection-methods) now has a default value of `true`).
+- [show_send_button](https://conversejs.org/docs/html/configuration.html#show-send-button) now has a default value of `true`.
+- The [api.confirm](https://conversejs.org/docs/html/api/-_converse.api.html#.confirm) method now accepts a list of fields and returns the filled in list upon confirmation.
+- New config option [allow_adhoc_commands](https://conversejs.org/docs/html/configuration.html#allow-adhoc-commands)
+- New config option [modtools_disable_assign](https://conversejs.org/docs/html/configuration.html#modtools-disable-assign)
+- New config option [modtools_disable_query](https://conversejs.org/docs/html/configuration.html#modtools-disable-query)
+- New config option [muc_hats_from_vcard](https://conversejs.org/docs/html/configuration.html#muc-hats-from-vcard).
+- New config option [muc_send_probes](https://conversejs.org/docs/html/configuration.html#muc-send-probes).
+- New config option [notify_nicknames_without_references](https://conversejs.org/docs/html/configuration.html#notify-nicknames-without-references).
+- New config option [show_message_avatar](https://conversejs.org/docs/html/configuration.html#show-message-avatar).
+- New public API [converse.insertInto](https://conversejs.org/docs/html/api/converse.html#.insertInto)
+
+## 6.0.0 (2020-01-09)
+
+- [enable_smacks](https://conversejs.org/docs/html/configuration.html#enable-smacks) is not set to `true` by default.
+- Refactor some presence and status handling code from `converse-core` into `@converse/headless/converse-status`.
+- It's now possible to navigate the emoji-picker via the keyboard arrow keys.
+
+- Add support for [notifications about affiliation change for users not in a room](https://xmpp.org/extensions/xep-0045.html#example-196)
+- Add support for [XEP-0424 Message Retraction](http://xmpps.org/extensions/xep-0424.html)
+- Add support for [XEP-0425 Message Moderation](http://xmpps.org/extensions/xep-0425.html)
+
+- New API [\_converse.api.headlines](https://conversejs.org/docs/html/api/-_converse.api.headlines.html#.get)
+- New config option [allow_message_retraction](https://conversejs.org/docs/html/configuration.html#allow-message-retraction)
+- New config option [muc-show-logs-before-join](https://conversejs.org/docs/html/configuration.html#muc-show-logs-before-join)
+- New config option [muc_mention_autocomplete_filter](https://conversejs.org/docs/html/configuration.html#muc-mention-autocomplete-filter)
+- New config option [muc_mention_autocomplete_show_avatar](https://conversejs.org/docs/html/configuration.html#muc-mention-autocomplete-show-avatar)
+- New config option [persistent_store](https://conversejs.org/docs/html/configuration.html#persistent-store)
+
+- Initial support for sending custom emojis. Currently only between Converse
+  instances. Still working out a wire protocol for compatibility with other clients.
+  To add custom emojis, edit the `emojis.json` file.
+
+- #129: Add support for [XEP-0156: Disovering Alternative XMPP Connection Methods](https://xmpp.org/extensions/xep-0156.html). Only XML is supported for now.
+- #1105: Support for storing persistent data in IndexedDB
+- #1253: Show contacts with unread messages at the top of the roster
+- #1322 Display occupants’ avatars in the occupants list
+- #1640: Add the ability to resize the occupants sidebar in MUCs
+- #1666: Allow scrolling of the OMEMO fingerprints list
+- #1691: Fix `collection.chatbox is undefined` errors
+- #1767: `credentials_url` is not called when logging out and then in again
+- #1764: Incorrect URI encoding in "mention" references
+- #1772: `_converse.api.contact.add(jid, nick)` fails, says not a function
+- #1791: `auto_focus` set to `false` is ignored when switching back to a MUC
+- #1792: Fix: modals don't have scrollbars
+- #1796: Don't show "back" arrow navigation (on mobile) in the chat header when in `singleton` mode
+- #1821: Errors caused by malformed URLs are now handled
+- #1819: Click on a desktop notification now opens corresponding chat.
+- #1836: MUC invites appear to come from the MUC name
+
+### Breaking changes
+
+- The ``debug`` configuration option has been replaced with [loglevel](https://conversejs.org/docs/html/configuration.html#loglevel).
+
+- In contrast to sessionStorage and localStorage, IndexedDB is an asynchronous database.
+  A lot of code that relied on database access to be synchronous had to be
+  updated to work with asynchronous access via promises.
+
+- In order to add support for XEP-0156, the XMPP connection needs to be created
+  only once we know the JID of the user that's logging in. This means that the
+  [connectionInitialized](https://conversejs.org/docs/html/api/-_converse.html#event:connectionInitialized)
+  event now fires much later than before. Plugins that rely on `connectionInitialized`
+  being triggered before the user's JID has been provided will need to be updated.
+
+- The following API methods now return promises:
+  * `_converse.api.chats.get`
+  * `_converse.api.chats.create`
+  * `_converse.api.rooms.get`
+  * `_converse.api.rooms.create`
+  * `_converse.api.roomviews.close`
+
+- Changes the events:
+  * The `chatBoxInitialized` event now triggers when a `_converse.ChatBox` (not the view) is opened.
+  * Renamed the old `chatBoxInitialized` to `chatBoxViewInitialized` and trigger only for `ChatBoxView` instances.
+  * Renamed `chatRoomOpened` event to `chatRoomViewInitialized`
+  * The order of certain events have now changed: `statusInitialized` is now triggered after `initialized` and `connected` and `reconnected`.
+
+- `_converse.api.chats.get()` now only returns one-on-one chats, not the control box or headline notifications.
+- The `show_only_online_users` setting has been removed.
+- `_converse.api.alert.show` is now `_converse.api.show` and instead of taking
+  an integer for the `type`, "info", "warn" or "error" should be passed in.
+- The `converse-headline` plugin has been split up into `converse-headlines` and `converse-headlines-view`.
+
+## 5.0.5 (2019-11-20)
+
+- Prevent editing of sent file uploads.
+- #1089: When filtering the roster for `online` users, show all non-offline users.
+- #1733: New message notifications for a minimized chat stack on top of each other
+- #1757: Chats are hidden behind the controlbox on mobile
+- #1760: Private messages no longer received after websocket reconnect
+
+## 5.0.4 (2019-10-08)
+
+- New config option [allow_message_corrections](https://conversejs.org/docs/html/configuration.html#allow-message-corrections)
+  which, if set to `last`, limits editing of sent messages to the last message sent.
+- Bugfix: Don't treat every duplicate message ID as a message correction; since some clients don't use globally unique ID's this causes false positives.
+- Bugfix: process stanzas from mam one-by-one in order to correctly process message receipts
+- #1712: `TypeError: plugin._features is not a function`
+- #1714: Don't notify the user in case we're receiving a message delivery receipt only
+- #1739: New config option [assets_path](https://conversejs.org/docs/html/configuration.html#assets-path)
+  which lets you set the path from which "chunks" are loaded.
+
+## 5.0.3 (2019-09-13)
+
+- Emit `chatBoxFocused` and `chatBoxBlurred` events for emoji picker input
+- SECURITY FIX: Reject unencapsulated forwarded messages, since we don't support XEP-0297 on its own
+
+## 5.0.2 (2019-09-11)
+
+- `po` translations files are now loaded via Webpack. As a result the `locales_url`
+  config option is now removed given that the path to the locale JSON files is now
+  determined by the webpack config and can't be changed at runtime.
+- The JSON representing emojis is now fetched asynchronously as a separate file `converse.emojis.js`.
+- Webpack is now configured with a `publicPath` set to `/dist/`. This is necessary
+  so that chunks (such as the emojis and locales JSON files) can be fetched asynchronously.
+  This means that all your assets need to be served at `/dist`. If you need to set a
+  different path, you'll need to set `publicPath` in `webpack.config.js` to
+  your preferred path and then rebuild all assets (e.g. `make dist`).
+- Use `listenTo` to avoid memory leaks when views get removed.
+- SECURITY FIX: Ignore MAM `chat` messages not sent from yourself
+- #1692 Bugfix: `TypeError: oldest_message is undefined`
+- #1704: SECURITY FIX: Impersonation by misusage of groupchat carbons
+- #1705: Bugfix: `this.roomspanel` is `undefined` after hibernating
+
+## 5.0.1 (2019-08-14)
+
+- Add a new GUI for moderator actions. You can trigger it by entering `/modtools` in a MUC.
+- Reconnect if the server doesn't respond to a `ping` within 10 seconds.
+- Don't query for MAM MUC messages before the cached messages have been restored (another cause of duplicate messages).
+- Show an error message and option to retry when fetching of the MAM archive times out
+- Bugfix: `TypeError: o.getAttribute is not a function converse-chatview.js` (can cause messages to not appear).
+- #1679: Room invitation fails with singleton and random server assigned room name
+
+## 5.0.0 (2019-08-08)
+
+- BOSH support has been moved to a plugin.
+- Support for XEP-0410 to check whether we're still present in a room
+- Initial support for the [CredentialsContainer](https://developer.mozilla.org/en-US/docs/Web/API/CredentialsContainer) web API
+- Allow for synchronous events. When a synchronous event is fired, Converse will
+  wait for all promises returned by the event's handlers to finish before continuing.
+- Properly handle message correction being received before the corrected message
+- Groupchat default configuration now supports `list-multi` fields
+- Bugfix: Don't set `muc_domain` for roomspanel if `locked_muc_domain` is `true`.
+- Bugfix: Modal auto-closes when you open it for a second time.
+- Bugfix: `Cannot read property 'parentElement' of null` in shadow DOM
+- Take roster nickname into consideration when rendering messages and chat headings.
+- Hide the textarea when a user is muted in a groupchat.
+- Don't restore a BOSH session without knowing the JID
+- In the `/help` menu, only show allowed commands
+- Message deduplication bugfixes and improvements
+- Continuously retry (in 2s intervals) to fetch login credentials (via [credentials_url](https://conversejs.org/docs/html/configuration.html#credentials-url)) in case of failure
+- Replace `moment` with [DayJS](https://github.com/iamkun/dayjs).
+- New config option [auto_focus](https://conversejs.org/docs/html/configuration.html#auto-focus)
+- New config option [clear_messages_on_reconnection](https://conversejs.org/docs/html/configuration.html#clear-messages-on-reconnection)
+- New config option [enable_smacks](https://conversejs.org/docs/html/configuration.html#enable-smacks)
+- New config option [message_limit](https://conversejs.org/docs/html/configuration.html#message-limit)
+- New config option [muc_fetch_members](https://conversejs.org/docs/html/configuration.html#muc-fetch-members)
+- New config option [muc_mention_autocomplete_min_chars](https://conversejs.org/docs/html/configuration.html#muc-mention-autocomplete-min-chars)
+- New config option [muc_show_join_leave_status](https://conversejs.org/docs/html/configuration.html#muc-show-join-leave-status)
+- New config option [singleton](https://conversejs.org/docs/html/configuration.html#singleton)
+  By setting this option to `false` and `view_mode` to `'embedded'`, it's now possible to
+  "embed" the full app and not just a single chat. To embed just a single chat, it's now
+  necessary to explicitly set `singleton` to `true`.
+- Re-add the previously removed config option [keepalive](https://conversejs.org/docs/html/configuration.html#keepalive)
+- New event: [chatBoxBlurred](https://conversejs.org/docs/html/api/-_converse.html#event:chatBoxBlurred)
+- New event: [chatReconnected](https://conversejs.org/docs/html/api/-_converse.html#event:chatReconnected)
+- #316: Add support for XEP-0198 Stream Management
+- #1071: x clear cross of same size as text
+- #1142: Up/down arrow shouldn't erase current message
+- #1196: Use alternative connection method upon connfail
+- #1296: `embedded` view mode shows `chatbox-navback` arrow in header
+- #1330: Missing room name in MUC invitation popup
+- #1445: Participants list uses big font in embedded mode
+- #1455: Avatar in controlbox status-view not updated
+- #1465: When highlighting a roster contact, they're incorrectly shown as online
+- #1476: Support OMEMO on by default for chats via a config variable
+- #1494: Trim whitespace around messages
+- #1495: Mentions should always include a URI attribute
+- #1502: Fatal error when using prebind
+- #1524: OMEMO libsignal-protocol.js Invalid signature
+- #1532: Converse reloads on enter pressed in the filter box
+- #1538: Allow adding self as contact
+- #1548: Add support for paging through the MAM results when filling in the blanks
+- #1550: Legitimate carbons being blocked due to erroneous forgery check
+- #1554: Room auto-configuration broke if the config form contained fields with type `fixed`
+- #1558: `this.get` is not a function error when `forward_messages` is set to `true`.
+- #1561: Don't call `clear` on local or session storage
+- #1572: In `fullscreen` view mode the top is cut off on iOS
+- #1575: MUC invitation autocomplete list doesn't appear
+- #1576: Converse gets stuck with spinner when logging out with `auto_login` set to `true`
+- #1579: Trim spaces at the beginning and end of a JID (when adding contact)
+- #1585: Upload files by pasting from clipboard
+- #1586: Not possible to kick someone with a space in their nickname
+- #1664: Blacklisting converse-profile makes the control box totally blank
+
+### Breaking changes
+
+- The minimum required NodeJS version for making builds is now 8.9.0
+- Rename `muc_disable_moderator_commands` to [muc_disable_slash_commands](https://conversejs.org/docs/html/configuration.html#muc-disable-slash-commands).
+- `_converse.api.archive.query` now returns a Promise instead of accepting a callback functions.
+- `_converse.api.disco.supports` now returns a Promise which resolves to a Boolean instead of an Array.
+- The `forward_messages` config option (which was set to `false` by default) has been removed.
+  Use [message_carbons](https://conversejs.org/docs/html/configuration.html#message-carbons) instead.
+- Remove the `keepalive` configuration setting. It is now always implicitly `true`.
+- Remove the `expose_rid_and_sid` configuration setting.
+- A `prebind_url` is now mandatory when setting `authentication` to `prebind`.
+  It's no longer possible to pass in `rid` and `sid` values to `converse.initialize.
+- Removed events `statusChanged` and `statusMessageChanged`. Instead, you can
+  listen on the `change:status` or `change:status\_message` events on
+  `_converse.xmppstatus`.
+- #1403: Rename show_chatstate_notifications to show_chat_state_notifications
+
+### API changes
+
+- `_converse.chats.open` and `_converse.rooms.open` now take a `force`
+  parameter to force maximizing (in `overlayed` view mode) or bringing a
+  background chat into the foreground (in `fullscreen` view mode). Previously
+  this was the default behavior.
+- `_converse.api.emit` has been removed in favor of [\_converse.api.trigger](https://conversejs.org/docs/html/api/-_converse.api.html#.trigger)
+- `_converse.updateSettings` has been removed in favor of [\_converse.api.settings.update](https://conversejs.org/docs/html/api/-_converse.api.settings.html#.update)
+- `_converse.api.roster.get` now returns a promise.
+- New API method [\_converse.api.disco.features.get](https://conversejs.org/docs/html/api/-_converse.api.disco.features.html#.get)
+- New API method [\_converse.api.connection.reconnect](https://conversejs.org/docs/html/api/-_converse.api.connection.html#.reconnect)
+
+## 4.2.0 (2019-04-04)
+
+**Note:** This release introduces a hard requirement on [MAM:2](https://xmpp.org/extensions/xep-0313.html),
+specifically the requirement that the MAM archive ID matches the [XEP-0359 stanza-id](https://xmpp.org/extensions/xep-0359.html).
+Patches intended to make Converse work with MAM:1 will cause problems and
+unexpected behaviour due to the above requirement, which is not met with MAM:1.
+This will affect OpenFire users who use the [monitoring plugin](https://www.igniterealtime.org/projects/openfire/plugin-archive.jsp?plugin=monitoring)
+version 1.7.0 and below. You're advised to stay on Converse version 4.1.2 until an update to that plugin has been released.
+
+- Updated translation: af, cz, de, es, gl, he, lt, nl, nl_BE, ru
+- Upgrade to Backbone 1.4.0, Strophe 1.3.2 and Jasmine 2.99.2
+- Remove dependency on (our fork of) Awesomplete
+- Prevent user from adding themselves as contact
+- Fix "flashing" of roster filter when you have less than 5 roster contacts
+- Fix handling of CAPTCHAs offered by ejabberd
+- Don't send out receipts or markers for MAM messages
 - Allow setting of debug mode via URL with `/#converse?debug=true`
+- Render inline images served over HTTP if Converse itself was loaded on an unsecured (HTTP) page.
+- Make sure `nickname` passed in via `_converse.initialize` has first preference as MUC nickname
+- Make sure required registration fields have "required" attribute
+- New config setting [autocomplete_add_contact](https://conversejs.org/docs/html/configuration.html#autocomplete-add-contact)
 - New config setting [locked_muc_domain](https://conversejs.org/docs/html/configuration.html#locked-muc-domain)
+- New config setting [locked_muc_nickname](https://conversejs.org/docs/html/configuration.html#locked-muc-nickname)
 - New config setting [show_client_info](https://conversejs.org/docs/html/configuration.html#show-client-info)
+- Document new API method [sendMessage](https://conversejs.org/docs/html/api/-_converse.ChatBox.html#sendMessage)
+- Don't filter out own device when sending an OMEMO message
 - #1149: With `xhr_user_search_url`, contact requests are not being sent out
 - #1213: Switch roster filter input and icons
 - #1327: fix False mentions positives in URLs and Email addresses
+- #1352: Add [Jed](https://github.com/messageformat/Jed) as dependency of `@converse/headless`
 - #1373: Re-add support for the [muc_domain](https://conversejs.org/docs/html/configuration.html#muc-domain) setting
 - #1400: When a chat message is just an emoji, enlarge the emoji
+- #1407: Silent errors when trying to use whitespace as MUC nickname
 - #1437: List of groupchats in modal doesn't scroll
 - #1457: Wrong tooltip shown for "unbookmark" icon
+- #1467: Fix rendering of URLs enclosed with sharp brackets such as <https://example.org>
 - #1479: Allow file upload by drag & drop also in MUCs
-
+- #1487: New config option [muc_respect_autojoin](https://conversejs.org/docs/html/configuration.html#muc-respect-autojoin)
+- #1488: In error message, fall back to JID if name is not available.
+- #1501: Don't prompt for a reason if [auto_join_on_invite](https://conversejs.org/docs/html/configuration.html#auto-join-on-invite) is `true`
+- #1507: Make message id and origin-id identical in order to fix LMC with Conversations
+- #1508: Minimized bookmarked chatboxes should not be always maximized after page reload.
+- #1512: Allow manual entry of jid even with [xhr_user_search_url](https://conversejs.org/docs/html/configuration.html#xhr-user-search-url).
+         The JID input field is now also visible. To hide it simply hide `.add-xmpp-contact__jid` via CSS.
 
 ## 4.1.2 (2019-02-22)
 
@@ -62,7 +397,7 @@
 - #1334 Force avatar refetch when receiving `vcard-temp:x:update`
 - #1337 `send_chat_state_notifications` doesn't work in MUCs
 - #1353 Message Delivery Receipts not working because of the message "type" attribute
-- #1356 Make triangle icon usable 
+- #1356 Make triangle icon usable
 - #1374 Can't load embedded chat when changing `view_mode` between page reloads
 - #1376 Fixed some alignment issues in the sidebar
 - #1378 Message Delivery Receipts were being sent for carbons and own messages

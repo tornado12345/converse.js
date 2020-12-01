@@ -1,54 +1,35 @@
-(function (root, factory) {
-    define(["jasmine", "mock", "test-utils"], factory);
-} (this, function (jasmine, mock, test_utils) {
-    "use strict";
+/*global mock, converse */
 
-    describe("XMPP Ping", function () {
-        describe("Ping and pong handlers", function () {
+const Strophe = converse.env.Strophe;
+const u = converse.env.utils;
 
-            it("are registered when _converse.js is connected",
-                mock.initConverse(
-                    null, ['rosterGroupsFetched'], {},
-                    function (done, _converse) {
 
-                spyOn(_converse, 'registerPingHandler').and.callThrough();
-                spyOn(_converse, 'registerPongHandler').and.callThrough();
-                _converse.emit('connected');
-                expect(_converse.registerPingHandler).toHaveBeenCalled();
-                expect(_converse.registerPongHandler).toHaveBeenCalled();
-                done();
-            }));
+describe("XMPP Ping", function () {
 
-            it("are registered when _converse.js reconnected",
-                mock.initConverse(
-                    null, ['rosterGroupsFetched'], {},
-                    function (done, _converse) {
+    describe("An IQ stanza", function () {
 
-                spyOn(_converse, 'registerPingHandler').and.callThrough();
-                spyOn(_converse, 'registerPongHandler').and.callThrough();
-                _converse.emit('reconnected');
-                expect(_converse.registerPingHandler).toHaveBeenCalled();
-                expect(_converse.registerPongHandler).toHaveBeenCalled();
-                done();
-            }));
-        });
+        it("is returned when converse.js gets pinged",
+                mock.initConverse(['statusInitialized'], {}, (done, _converse) => {
+            const ping = u.toStanza(`
+                <iq from="${_converse.domain}"
+                    to="${_converse.jid}" id="s2c1" type="get">
+                    <ping xmlns="urn:xmpp:ping"/>
+                </iq>`);
+            _converse.connection._dataRecv(mock.createRequest(ping));
+            const sent_stanza = _converse.connection.IQ_stanzas.pop();
+            expect(Strophe.serialize(sent_stanza)).toBe(
+                `<iq id="s2c1" to="${_converse.domain}" type="result" xmlns="jabber:client"/>`);
+            done();
+        }));
 
-        describe("An IQ stanza", function () {
-
-            it("is sent out when _converse.js pings a server", mock.initConverse((done, _converse) => {
-                let sent_stanza, IQ_id;
-                const sendIQ = _converse.connection.sendIQ;
-                spyOn(_converse.connection, 'sendIQ').and.callFake(function (iq, callback, errback) {
-                    sent_stanza = iq;
-                    IQ_id = sendIQ.bind(this)(iq, callback, errback);
-                });
-                _converse.ping();
-                expect(sent_stanza.toLocaleString()).toBe(
-                    `<iq id="${IQ_id}" to="localhost" type="get" xmlns="jabber:client">`+
-                        `<ping xmlns="urn:xmpp:ping"/>`+
-                    `</iq>`);
-                done();
-            }));
-        });
+        it("is sent out when converse.js pings a server", mock.initConverse((done, _converse) => {
+            _converse.api.ping();
+            const sent_stanza = _converse.connection.IQ_stanzas.pop();
+            expect(Strophe.serialize(sent_stanza)).toBe(
+                `<iq id="${sent_stanza.getAttribute('id')}" to="montague.lit" type="get" xmlns="jabber:client">`+
+                    `<ping xmlns="urn:xmpp:ping"/>`+
+                `</iq>`);
+            done();
+        }));
     });
-}));
+});

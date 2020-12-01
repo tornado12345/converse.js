@@ -1,17 +1,13 @@
-// Converse.js (A browser based XMPP chat client)
-// https://conversejs.org
-//
-// This is a form utilities module.
-//
-// Copyright (c) 2013-2019, Jan-Carel Brand <jc@opkode.com>
-// Licensed under the Mozilla Public License (MPLv2)
-
+/**
+ * @copyright 2020, the Converse.js contributors
+ * @license Mozilla Public License (MPLv2)
+ * @description This is the DOM/HTML utilities module.
+ */
 import URI from "urijs";
-import _ from "../headless/lodash.noconflict";
+import log from '@converse/headless/log';
 import sizzle from "sizzle";
-import tpl_audio from  "../templates/audio.html";
-import tpl_field from "@converse/headless/templates/field.html";
-import tpl_file from "../templates/file.html";
+import tpl_audio from  "../templates/audio.js";
+import tpl_file from "../templates/file.js";
 import tpl_form_captcha from "../templates/form_captcha.html";
 import tpl_form_checkbox from "../templates/form_checkbox.html";
 import tpl_form_input from "../templates/form_input.html";
@@ -19,19 +15,22 @@ import tpl_form_select from "../templates/form_select.html";
 import tpl_form_textarea from "../templates/form_textarea.html";
 import tpl_form_url from "../templates/form_url.html";
 import tpl_form_username from "../templates/form_username.html";
-import tpl_image from "../templates/image.html";
+import tpl_image from "../templates/image.js";
 import tpl_select_option from "../templates/select_option.html";
-import tpl_video from "../templates/video.html";
+import tpl_video from "../templates/video.js";
 import u from "../headless/utils/core";
+import { api } from  "@converse/headless/converse-core";
+import { html, render } from "lit-html";
+import { isFunction } from "lodash-es";
 
-const URL_REGEX = /\b(https?:\/\/|www\.|https?:\/\/www\.)[^\s<>]{2,200}\b\/?/g;
+const APPROVED_URL_PROTOCOLS = ['http', 'https', 'xmpp', 'mailto'];
 
-const logger = _.assign({
-    'debug': _.get(console, 'log') ? console.log.bind(console) : _.noop,
-    'error': _.get(console, 'log') ? console.log.bind(console) : _.noop,
-    'info': _.get(console, 'log') ? console.log.bind(console) : _.noop,
-    'warn': _.get(console, 'log') ? console.log.bind(console) : _.noop
-}, console);
+function getAutoCompleteProperty (name, options) {
+    return {
+        'muc#roomconfig_lang': 'language',
+        'muc#roomconfig_roomsecret': options?.new_password ? 'new-password' : 'current-password'
+    }[name];
+}
 
 const XFORM_TYPE_MAP = {
     'text-private': 'password',
@@ -52,266 +51,261 @@ function slideOutWrapup (el) {
     el.style.height = "";
 }
 
-
-const isImage = function (url) {
-    return new Promise((resolve, reject) => {
-        var img = new Image();
-        var timer = window.setTimeout(function () {
-            reject(new Error("Could not determine whether it's an image"));
-            img = null;
-        }, 3000);
-        img.onerror = img.onabort = function () {
-            clearTimeout(timer);
-            reject(new Error("Could not determine whether it's an image"));
-        };
-        img.onload = function () {
-            clearTimeout(timer);
-            resolve(img);
-        };
-        img.src = url;
-    });
-};
-
-
-u.isAudioURL = function (url) {
-    if (!(url instanceof URI)) {
-        url = new URI(url);
+function getURI (url) {
+    try {
+        return (url instanceof URI) ? url : (new URI(url));
+    } catch (error) {
+        log.debug(error);
+        return null;
     }
-    const filename = url.filename().toLowerCase();
-    if (url.protocol().toLowerCase() !== "https") {
-        return false;
-    }
-    return filename.endsWith('.ogg') || filename.endsWith('.mp3') || filename.endsWith('.m4a');
 }
 
-
-u.isImageURL = function (url) {
-    if (!(url instanceof URI)) {
-        url = new URI(url);
-    }
-    const filename = url.filename().toLowerCase();
-    if (url.protocol().toLowerCase() !== "https") {
-        return false;
-    }
-    return filename.endsWith('.jpg') || filename.endsWith('.jpeg') ||
-           filename.endsWith('.png') || filename.endsWith('.gif') ||
-           filename.endsWith('.bmp') || filename.endsWith('.tiff') ||
-           filename.endsWith('.svg');
-};
-
-
-u.isVideoURL = function (url) {
-    if (!(url instanceof URI)) {
-        url = new URI(url);
-    }
-    const filename = url.filename().toLowerCase();
-    if (url.protocol().toLowerCase() !== "https") {
-        return false;
-    }
-    return filename.endsWith('.mp4') || filename.endsWith('.webm');
+function checkTLS (uri) {
+    return window.location.protocol === 'http:' ||
+           window.location.protocol === 'https:' && uri.protocol().toLowerCase() === "https";
 }
 
-
-u.renderAudioURL = function (_converse, url) {
-    const uri = new URI(url);
-    if (u.isAudioURL(uri)) {
-        const { __ } = _converse;
-        return tpl_audio({
-            'url': url,
-            'label_download': __('Download audio file "%1$s"', decodeURI(uri.filename()))
-        })
+function checkFileTypes (types, url) {
+    const uri = getURI(url);
+    if (uri === null || !checkTLS(uri)) {
+        return false;
     }
-    return url;
-};
+    const filename = uri.filename().toLowerCase();
+    return !!types.filter(ext => filename.endsWith(ext)).length;
+}
 
+u.isAudioURL = url => checkFileTypes(['.ogg', '.mp3', '.m4a'], url);
+u.isVideoURL = url => checkFileTypes(['.mp4', '.webm'], url);
 
-u.renderFileURL = function (_converse, url) {
-    const uri = new URI(url);
-    if (u.isImageURL(uri) || u.isVideoURL(uri) || u.isAudioURL(uri)) {
+u.isURLWithImageExtension = url => checkFileTypes(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.svg'], url);
+
+u.isImageURL = url => {
+    const regex = api.settings.get('image_urls_regex');
+    return regex?.test(url) || u.isURLWithImageExtension(url);
+}
+u.isImageDomainAllowed = url => {
+    const show_images_inline = api.settings.get('show_images_inline');
+    if (!Array.isArray(show_images_inline)) {
+        return true;
+    }
+    try {
+        const image_domain = getURI(url).domain();
+        return show_images_inline.includes(image_domain);
+    } catch (error) {
+        log.debug(error);
+        return true;
+    }
+}
+
+function getFileName (uri) {
+    try {
+        return decodeURI(uri.filename());
+    } catch (error) {
+        log.debug(error);
+        return uri.filename();
+    }
+}
+
+function renderAudioURL (_converse, uri) {
+    const { __ } = _converse;
+    return tpl_audio({
+        'url': uri.toString(),
+        'label_download': __('Download audio file "%1$s"', getFileName(uri))
+    })
+}
+
+function renderImageURL (_converse, uri) {
+    const { __ } = _converse;
+    return tpl_file({
+        'url': uri.toString(),
+        'label_download': __('Download image file "%1$s"', getFileName(uri))
+    })
+}
+
+function renderFileURL (_converse, uri) {
+    const { __ } = _converse;
+    return tpl_file({
+        'url': uri.toString(),
+        'label_download': __('Download file "%1$s"', getFileName(uri))
+    })
+}
+
+/**
+ * Returns the markup for a URL that points to a downloadable asset
+ * (such as a video, image or audio file).
+ * @method u#getOOBURLMarkup
+ * @param { String } url
+ * @returns { String }
+ */
+u.getOOBURLMarkup = function (_converse, url) {
+    const uri = getURI(url);
+    if (uri === null) {
         return url;
     }
-    const { __ } = _converse,
-          filename = uri.filename();
-    return tpl_file({
-        'url': url,
-        'label_download': __('Download file "%1$s"', decodeURI(filename))
-    })
-};
-
-
-u.renderImageURL = function (_converse, url) {
-    if (!_converse.show_images_inline) {
-        return u.addHyperlinks(url);
-    }
-    const uri = new URI(url);
-    if (u.isImageURL(uri)) {
-        const { __ } = _converse;
-        return tpl_image({
-            'url': url,
-            'label_download': __('Download image "%1$s"', decodeURI(uri.filename()))
-        })
-    }
-    return url;
-};
-
-
-u.renderImageURLs = function (_converse, el) {
-    /* Returns a Promise which resolves once all images have been loaded.
-     */
-    if (!_converse.show_images_inline) {
-        return Promise.resolve();
-    }
-    const { __ } = _converse;
-    const list = el.textContent.match(URL_REGEX) || [];
-    return Promise.all(
-        _.map(list, url =>
-            new Promise((resolve, reject) => {
-                if (u.isImageURL(url)) {
-                    return isImage(url).then(img => {
-                        const i = new Image();
-                        i.src = img.src;
-                        i.addEventListener('load', resolve);
-                        // We also resolve for non-images, otherwise the
-                        // Promise.all resolves prematurely.
-                        i.addEventListener('error', resolve);
-
-                        const { __ } = _converse;
-                        _.each(sizzle(`a[href="${url}"]`, el), (a) => {
-                            a.outerHTML= tpl_image({
-                                'url': url,
-                                'label_download': __('Download')
-                            })
-                        });
-                    }).catch(resolve)
-                } else {
-                    return resolve();
-                }
-            })
-        )
-    )
-};
-
-
-u.renderMovieURL = function (_converse, url) {
-    const uri = new URI(url);
     if (u.isVideoURL(uri)) {
-        const { __ } = _converse;
-        return tpl_video({
-            'url': url,
-            'label_download': __('Download video file "%1$s"', decodeURI(uri.filename()))
-        })
+        return tpl_video({url})
+    } else if (u.isAudioURL(uri)) {
+        return renderAudioURL(_converse, uri);
+    } else if (u.isImageURL(uri)) {
+        return renderImageURL(_converse, uri);
+    } else {
+        return renderFileURL(_converse, uri);
     }
-    return url;
+}
+
+
+/**
+ * Applies some resistance to `value` around the `default_value`.
+ * If value is close enough to `default_value`, then it is returned, otherwise
+ * `value` is returned.
+ * @method u#applyDragResistance
+ * @param { Integer } value
+ * @param { Integer } default_value
+ * @returns { Integer }
+ */
+u.applyDragResistance = function (value, default_value) {
+    if (value === undefined) {
+        return undefined;
+    } else if (default_value === undefined) {
+        return value;
+    }
+    const resistance = 10;
+    if ((value !== default_value) &&
+        (Math.abs(value- default_value) < resistance)) {
+        return default_value;
+    }
+    return value;
 };
 
 
-u.renderNewLines = function (text) {
-    return text.replace(/\n\n+/g, '<br/><br/>').replace(/\n/g, '<br/>');
-};
-
+/**
+ * Return the height of the passed in DOM element,
+ * based on the heights of its children.
+ * @method u#calculateElementHeight
+ * @param {HTMLElement} el
+ * @returns {integer}
+ */
 u.calculateElementHeight = function (el) {
-    /* Return the height of the passed in DOM element,
-     * based on the heights of its children.
-     */
-    return _.reduce(
-        el.children,
-        (result, child) => result + child.offsetHeight, 0
-    );
+    return Array.from(el.children).reduce((result, child) => result + child.offsetHeight, 0);
 }
 
 u.getNextElement = function (el, selector='*') {
     let next_el = el.nextElementSibling;
-    while (!_.isNull(next_el) && !sizzle.matchesSelector(next_el, selector)) {
+    while (next_el !== null && !sizzle.matchesSelector(next_el, selector)) {
         next_el = next_el.nextElementSibling;
     }
     return next_el;
 }
 
 u.getPreviousElement = function (el, selector='*') {
-    let prev_el = el.previousSibling;
-    while (!_.isNull(prev_el) && !sizzle.matchesSelector(prev_el, selector)) {
-        prev_el = prev_el.previousSibling
+    let prev_el = el.previousElementSibling;
+    while (prev_el !== null && !sizzle.matchesSelector(prev_el, selector)) {
+        prev_el = prev_el.previousElementSibling
     }
     return prev_el;
 }
 
 u.getFirstChildElement = function (el, selector='*') {
     let first_el = el.firstElementChild;
-    while (!_.isNull(first_el) && !sizzle.matchesSelector(first_el, selector)) {
-        first_el = first_el.nextSibling
+    while (first_el !== null && !sizzle.matchesSelector(first_el, selector)) {
+        first_el = first_el.nextElementSibling
     }
     return first_el;
 }
 
 u.getLastChildElement = function (el, selector='*') {
     let last_el = el.lastElementChild;
-    while (!_.isNull(last_el) && !sizzle.matchesSelector(last_el, selector)) {
-        last_el = last_el.previousSibling
+    while (last_el !== null && !sizzle.matchesSelector(last_el, selector)) {
+        last_el = last_el.previousElementSibling
     }
     return last_el;
 }
 
 u.hasClass = function (className, el) {
-    return _.includes(el.classList, className);
+    return (el instanceof Element) && el.classList.contains(className);
 };
 
-u.addClass = function (className, el) {
-    if (el instanceof Element) {
-        el.classList.add(className);
-    }
+
+u.toggleClass = function (className, el) {
+    u.hasClass(className, el) ? u.removeClass(className, el) : u.addClass(className, el);
 }
 
+/**
+ * Add a class to an element.
+ * @method u#addClass
+ * @param {string} className
+ * @param {Element} el
+ */
+u.addClass = function (className, el) {
+    (el instanceof Element) && el.classList.add(className);
+    return el;
+}
+
+/**
+ * Remove a class from an element.
+ * @method u#removeClass
+ * @param {string} className
+ * @param {Element} el
+ */
 u.removeClass = function (className, el) {
-    if (el instanceof Element) {
-        el.classList.remove(className);
-    }
+    (el instanceof Element) && el.classList.remove(className);
     return el;
 }
 
 u.removeElement = function (el) {
-    if (!_.isNil(el) && !_.isNil(el.parentNode)) {
-        el.parentNode.removeChild(el);
-    }
+    (el instanceof Element) && el.parentNode && el.parentNode.removeChild(el);
+    return el;
 }
 
-u.showElement = _.flow(
-    _.partial(u.removeClass, 'collapsed'),
-    _.partial(u.removeClass, 'hidden')
-)
+u.getElementFromTemplateResult = function (tr) {
+    const div = document.createElement('div');
+    render(tr, div);
+    return div.firstElementChild;
+}
+
+u.showElement = el => {
+    u.removeClass('collapsed', el);
+    u.removeClass('hidden', el);
+}
 
 u.hideElement = function (el) {
-    if (!_.isNil(el)) {
-        el.classList.add('hidden');
-    }
+    (el instanceof Element) && el.classList.add('hidden');
     return el;
 }
 
 u.ancestor = function (el, selector) {
     let parent = el;
-    while (!_.isNil(parent) && !sizzle.matchesSelector(parent, selector)) {
+    while (parent !== null && !sizzle.matchesSelector(parent, selector)) {
         parent = parent.parentElement;
     }
     return parent;
 }
 
-u.nextUntil = function (el, selector, include_self=false) {
-    /* Return the element's siblings until one matches the selector. */
+/**
+ * Return the element's siblings until one matches the selector.
+ * @private
+ * @method u#nextUntil
+ * @param { HTMLElement } el
+ * @param { String } selector
+ */
+u.nextUntil = function (el, selector) {
     const matches = [];
     let sibling_el = el.nextElementSibling;
-    while (!_.isNil(sibling_el) && !sibling_el.matches(selector)) {
+    while (sibling_el !== null && !sibling_el.matches(selector)) {
         matches.push(sibling_el);
         sibling_el = sibling_el.nextElementSibling;
     }
     return matches;
 }
 
+/**
+ * Helper method that replace HTML-escaped symbols with equivalent characters
+ * (e.g. transform occurrences of '&amp;' to '&')
+ * @private
+ * @method u#unescapeHTML
+ * @param { String } string - a String containing the HTML-escaped symbols.
+ */
 u.unescapeHTML = function (string) {
-    /* Helper method that replace HTML-escaped symbols with equivalent characters
-     * (e.g. transform occurrences of '&amp;' to '&')
-     *
-     * Parameters:
-     *  (String) string: a String containing the HTML-escaped symbols.
-     */
     var div = document.createElement('div');
     div.innerHTML = string;
     return div.innerText;
@@ -325,56 +319,100 @@ u.escapeHTML = function (string) {
         .replace(/"/g, "&quot;");
 };
 
-
-u.addMentionsMarkup = function (text, references, chatbox) {
-    if (chatbox.get('message_type') !== 'groupchat') {
-        return text;
-    }
-    const nick = chatbox.get('nick');
-    references
-        .sort((a, b) => b.begin - a.begin)
-        .forEach(ref => {
-            const mention = text.slice(ref.begin, ref.end)
-            chatbox;
-            if (mention === nick) {
-                text = text.slice(0, ref.begin) + `<span class="mention mention--self badge badge-info">${mention}</span>` + text.slice(ref.end);
-            } else {
-                text = text.slice(0, ref.begin) + `<span class="mention">${mention}</span>` + text.slice(ref.end);
-            }
-        });
-    return text;
+u.convertToImageTag = function (url, onLoad, onClick) {
+    return tpl_image({url, onClick, onLoad});
 };
 
+u.convertURIoHyperlink = function (uri, urlAsTyped) {
+    let normalized_url = uri.normalize()._string;
+    const pretty_url = uri._parts.urn ? normalized_url : uri.readable();
+    const visible_url = urlAsTyped || pretty_url;
+    if (!uri._parts.protocol && !normalized_url.startsWith('http://') && !normalized_url.startsWith('https://')) {
+        normalized_url = 'http://' + normalized_url;
+    }
+    if (uri._parts.protocol === 'xmpp' && uri._parts.query === 'join') {
+        return html`
+            <a target="_blank"
+               rel="noopener"
+               @click=${ev => api.rooms.open(ev.target.href)}
+               href="${normalized_url}">${visible_url}</a>`;
+    }
+    return html`<a target="_blank" rel="noopener" href="${normalized_url}">${visible_url}</a>`;
+};
+
+function isProtocolApproved (protocol, safeProtocolsList = APPROVED_URL_PROTOCOLS) {
+    return !!safeProtocolsList.includes(protocol);
+}
+
+// Will return false if URL is malformed or contains disallowed characters
+function isUrlValid (urlString) {
+    try {
+        const url = new URL(urlString);
+        return !!url;
+    } catch (error) {
+        return false;
+    }
+}
+
+u.convertUrlToHyperlink = function (url) {
+    const http_url = RegExp('^w{3}.', 'ig').test(url) ? `http://${url}` : url;
+    const uri = getURI(url);
+    if (uri !== null && isUrlValid(http_url) && (isProtocolApproved(uri._parts.protocol) || !uri._parts.protocol)) {
+        return this.convertURIoHyperlink(uri, url);
+    }
+    return url;
+};
+
+u.filterQueryParamsFromURL = function (url) {
+    const paramsArray = api.settings.get("filter_url_query_params");
+    if (!paramsArray) return url;
+    const parsed_uri = getURI(url);
+    return parsed_uri.removeQuery(paramsArray).toString();
+};
 
 u.addHyperlinks = function (text) {
-    return URI.withinString(text, url => {
-        const uri = new URI(url);
-        url = uri.normalize()._string;
-        const pretty_url = uri._parts.urn ? url : uri.readable();
-        if (!uri._parts.protocol && !url.startsWith('http://') && !url.startsWith('https://')) {
-            url = 'http://' + url;
-        }
-        if (uri._parts.protocol === 'xmpp' && uri._parts.query === 'join') {
-            return `<a target="_blank" rel="noopener" class="open-chatroom" href="${url}">${u.escapeHTML(pretty_url)}</a>`;
-        }
-        return `<a target="_blank" rel="noopener" href="${url}">${u.escapeHTML(pretty_url)}</a>`;
-    }, {
-        'start': /\b(?:([a-z][a-z0-9.+-]*:\/\/)|xmpp:|mailto:|www\.)/gi
-    });
+    const objs = [];
+    const parse_options = { 'start': /\b(?:([a-z][a-z0-9.+-]*:\/\/)|xmpp:|mailto:|www\.)/gi };
+    try {
+        URI.withinString(text, (url, start, end) => {
+            objs.push({url, start, end})
+            return url;
+        } , parse_options);
+    } catch (error) {
+        log.debug(error);
+        return [text];
+    }
+
+    let list = [text];
+    if (objs.length) {
+        objs.sort((a, b) => b.start - a.start)
+            .forEach(url_obj => {
+                const text = list.shift();
+                const url_text = text.slice(url_obj.start, url_obj.end);
+                list = [
+                    text.slice(0, url_obj.start),
+                    u.convertUrlToHyperlink(url_text),
+                    text.slice(url_obj.end),
+                    ...list
+                ];
+            });
+    } else {
+        list = [text];
+    }
+    return list;
+}
+
+u.httpToGeoUri = function(text, _converse) {
+    const replacement = 'geo:$1,$2';
+    return text.replace(_converse.api.settings.get("geouri_regex"), replacement);
 };
 
-
 u.slideInAllElements = function (elements, duration=300) {
-    return Promise.all(
-        _.map(
-            elements,
-            _.partial(u.slideIn, _, duration)
-        ));
+    return Promise.all(Array.from(elements).map(e => u.slideIn(e, duration)));
 };
 
 u.slideToggleElement = function (el, duration) {
-    if (_.includes(el.classList, 'collapsed') ||
-            _.includes(el.classList, 'hidden')) {
+    if (u.hasClass('collapsed', el) || u.hasClass('hidden', el)) {
         return u.slideOut(el, duration);
     } else {
         return u.slideIn(el, duration);
@@ -382,17 +420,18 @@ u.slideToggleElement = function (el, duration) {
 };
 
 
+/**
+ * Shows/expands an element by sliding it out of itself
+ * @private
+ * @method u#slideOut
+ * @param { HTMLElement } el - The HTML string
+ * @param { Number } duration - The duration amount in milliseconds
+ */
 u.slideOut = function (el, duration=200) {
-    /* Shows/expands an element by sliding it out of itself
-     *
-     * Parameters:
-     *      (HTMLElement) el - The HTML string
-     *      (Number) duration - The duration amount in milliseconds
-     */
     return new Promise((resolve, reject) => {
-        if (_.isNil(el)) {
-            const err = "Undefined or null element passed into slideOut"
-            logger.warn(err);
+        if (!el) {
+            const err = "An element needs to be passed in to slideOut"
+            log.warn(err);
             reject(new Error(err));
             return;
         }
@@ -449,11 +488,11 @@ u.slideOut = function (el, duration=200) {
 u.slideIn = function (el, duration=200) {
     /* Hides/collapses an element by sliding it into itself. */
     return new Promise((resolve, reject) => {
-        if (_.isNil(el)) {
-            const err = "Undefined or null element passed into slideIn";
-            logger.warn(err);
+        if (!el) {
+            const err = "An element needs to be passed in to slideIn";
+            log.warn(err);
             return reject(new Error(err));
-        } else if (_.includes(el.classList, 'collapsed')) {
+        } else if (u.hasClass('collapsed', el)) {
             return resolve(el);
         } else if (window.converse_disable_effects) { // Effects are disabled (for tests)
             el.classList.add('collapsed');
@@ -495,12 +534,19 @@ u.slideIn = function (el, duration=200) {
 
 function afterAnimationEnds (el, callback) {
     el.classList.remove('visible');
-    if (_.isFunction(callback)) {
+    if (isFunction(callback)) {
         callback();
     }
 }
 
+u.isInDOM = function (el) {
+    return document.querySelector('body').contains(el);
+}
+
 u.isVisible = function (el) {
+    if (el === null) {
+        return false;
+    }
     if (u.hasClass('hidden', el)) {
         return false;
     }
@@ -510,93 +556,87 @@ u.isVisible = function (el) {
 
 
 u.fadeIn = function (el, callback) {
-    if (_.isNil(el)) {
-        logger.warn("Undefined or null element passed into fadeIn");
+    if (!el) {
+        log.warn("An element needs to be passed in to fadeIn");
     }
     if (window.converse_disable_effects) {
         el.classList.remove('hidden');
         return afterAnimationEnds(el, callback);
     }
-    if (_.includes(el.classList, 'hidden')) {
+    if (u.hasClass('hidden', el)) {
         el.classList.add('visible');
         el.classList.remove('hidden');
-        el.addEventListener("webkitAnimationEnd", _.partial(afterAnimationEnds, el, callback));
-        el.addEventListener("animationend", _.partial(afterAnimationEnds, el, callback));
-        el.addEventListener("oanimationend", _.partial(afterAnimationEnds, el, callback));
+        el.addEventListener("webkitAnimationEnd", () => afterAnimationEnds(el, callback));
+        el.addEventListener("animationend", () => afterAnimationEnds(el, callback));
+        el.addEventListener("oanimationend", () => afterAnimationEnds(el, callback));
     } else {
         afterAnimationEnds(el, callback);
     }
 };
 
 
-u.xForm2webForm = function (field, stanza, domain) {
-    /* Takes a field in XMPP XForm (XEP-004: Data Forms) format
-     * and turns it into an HTML field.
-     *
-     * Returns either text or a DOM element (which is not ideal, but fine
-     * for now).
-     *
-     *  Parameters:
-     *      (XMLElement) field - the field to convert
-     */
+/**
+ * Takes a field in XMPP XForm (XEP-004: Data Forms) format
+ * and turns it into an HTML field.
+ * Returns either text or a DOM element (which is not ideal, but fine for now).
+ * @private
+ * @method u#xForm2webForm
+ * @param { XMLElement } field - the field to convert
+ */
+u.xForm2webForm = function (field, stanza, options) {
     if (field.getAttribute('type') === 'list-single' ||
         field.getAttribute('type') === 'list-multi') {
 
-        const values = _.map(
-            u.queryChildren(field, 'value'),
-            _.partial(_.get, _, 'textContent')
-        );
-        const options = _.map(
-            u.queryChildren(field, 'option'),
-            function (option) {
-                const value = _.get(option.querySelector('value'), 'textContent');
-                return tpl_select_option({
-                    'value': value,
-                    'label': option.getAttribute('label'),
-                    'selected': _.includes(values, value),
-                    'required': !_.isNil(field.querySelector('required'))
-                })
-            }
-        );
+        const values = u.queryChildren(field, 'value').map(el => el?.textContent);
+        const options = u.queryChildren(field, 'option').map(option => {
+            const value = option.querySelector('value')?.textContent;
+            return tpl_select_option({
+                'value': value,
+                'label': option.getAttribute('label'),
+                'selected': values.includes(value),
+                'required': !!field.querySelector('required')
+            });
+        });
         return tpl_form_select({
             'id': u.getUniqueId(),
             'name': field.getAttribute('var'),
             'label': field.getAttribute('label'),
             'options': options.join(''),
             'multiple': (field.getAttribute('type') === 'list-multi'),
-            'required': !_.isNil(field.querySelector('required'))
+            'required': !!field.querySelector('required')
         });
     } else if (field.getAttribute('type') === 'fixed') {
-        const text = _.get(field.querySelector('value'), 'textContent');
+        const text = field.querySelector('value')?.textContent;
         return '<p class="form-help">'+text+'</p>';
     } else if (field.getAttribute('type') === 'jid-multi') {
         return tpl_form_textarea({
             'name': field.getAttribute('var'),
             'label': field.getAttribute('label') || '',
-            'value': _.get(field.querySelector('value'), 'textContent'),
-            'required': !_.isNil(field.querySelector('required'))
+            'value': field.querySelector('value')?.textContent,
+            'required': !!field.querySelector('required')
         });
     } else if (field.getAttribute('type') === 'boolean') {
+        const value = field.querySelector('value')?.textContent;
         return tpl_form_checkbox({
             'id': u.getUniqueId(),
             'name': field.getAttribute('var'),
             'label': field.getAttribute('label') || '',
-            'checked': _.get(field.querySelector('value'), 'textContent') === "1" && 'checked="1"' || '',
-            'required': !_.isNil(field.querySelector('required'))
+            'checked': (value === "1" || value === "true") && 'checked="1"' || '',
+            'required': !!field.querySelector('required')
         });
     } else if (field.getAttribute('var') === 'url') {
         return tpl_form_url({
             'label': field.getAttribute('label') || '',
-            'value': _.get(field.querySelector('value'), 'textContent')
+            'value': field.querySelector('value')?.textContent
         });
     } else if (field.getAttribute('var') === 'username') {
         return tpl_form_username({
-            'domain': ' @'+domain,
+            'domain': ' @'+options.domain,
             'name': field.getAttribute('var'),
             'type': XFORM_TYPE_MAP[field.getAttribute('type')],
             'label': field.getAttribute('label') || '',
-            'value': _.get(field.querySelector('value'), 'textContent'),
-            'required': !_.isNil(field.querySelector('required'))
+            'value': field.querySelector('value')?.textContent,
+            'required': !!field.querySelector('required')
         });
     } else if (field.getAttribute('var') === 'ocr') { // Captcha
         const uri = field.querySelector('uri');
@@ -604,19 +644,22 @@ u.xForm2webForm = function (field, stanza, domain) {
         return tpl_form_captcha({
             'label': field.getAttribute('label'),
             'name': field.getAttribute('var'),
-            'data': _.get(el, 'textContent'),
+            'data': el?.textContent,
             'type': uri.getAttribute('type'),
-            'required': !_.isNil(field.querySelector('required'))
+            'required': !!field.querySelector('required')
         });
     } else {
+        const name = field.getAttribute('var');
         return tpl_form_input({
             'id': u.getUniqueId(),
             'label': field.getAttribute('label') || '',
-            'name': field.getAttribute('var'),
+            'name': name,
+            'fixed_username': options?.fixed_username,
+            'autocomplete': getAutoCompleteProperty(name, options),
             'placeholder': null,
-            'required': !_.isNil(field.querySelector('required')),
+            'required': !!field.querySelector('required'),
             'type': XFORM_TYPE_MAP[field.getAttribute('type')],
-            'value': _.get(field.querySelector('value'), 'textContent')
+            'value': field.querySelector('value')?.textContent
         });
     }
 }

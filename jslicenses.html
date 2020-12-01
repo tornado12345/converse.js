@@ -1,23 +1,27 @@
 <!DOCTYPE html>
 <html lang=en>
 <head>
-    <title>Converse.js</title>
+    <title>Converse</title>
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Converse.js: An XMPP chat client which can be integrated into any website" />
+    <meta name="description" content="Converse: An XMPP chat client which can be integrated into any website" />
     <meta name="author" content="JC Brand" />
-    <meta name="keywords" content="xmpp chat webchat converse.js" />
-    <link rel="shortcut icon" type="image/ico" href="css/images/favicon.ico"/>
-    <link type="text/css" rel="stylesheet" media="screen" href="css/bootstrap.min.css" />
-    <link type="text/css" rel="stylesheet" media="screen" href="css/font-awesome.min.css" />
-    <link type="text/css" rel="stylesheet" media="screen" href="css/theme.min.css" />
-    <script type="text/javascript" src="analytics.js"></script>
+    <meta name="keywords" content="xmpp chat webchat converse.js Converse" />
+
+    <!-- These files are NOT needed when using converse.js in your own project. -->
+    <link rel="shortcut icon" type="image/ico" href="images/favicon.ico"/>
+    <link type="text/css" rel="stylesheet" media="screen" href="https://cdn.conversejs.org/7.0.2/css/font-awesome.min.css" />
+    <link type="text/css" rel="stylesheet" media="screen" href="https://cdn.conversejs.org/7.0.2/css/website.min.css" />
     <noscript><p><img src="//stats.opkode.com/piwik.php?idsite=1" style="border:0;" alt="" /></p></noscript>
-    <script src="src/website.js"></script>
+    <script type="text/javascript" src="/src/website.js"></script>
+    <script type="text/javascript" src="analytics.js"></script>
+    <!-- *********************************************************************** -->
+
     <![if gte IE 11]>
-        <link type="text/css" rel="stylesheet" media="screen" href="css/converse.css" />
-        <script src="dist/converse.js"></script>
+        <link type="text/css" rel="stylesheet" media="screen" href="https://cdn.conversejs.org/7.0.2/css/converse.min.css" />
+        <script src="https://cdn.conversejs.org/3rdparty/libsignal-protocol.min.js"></script>
+        <script src="https://cdn.conversejs.org/7.0.2/dist/converse.min.js"></script>
     <![endif]>
 </head>
 
@@ -62,7 +66,7 @@
             <table id="jslicense-labels1" style="width: 100%">
                 <tr>
                     <td>
-                        <a href="https://cdn.conversejs.org/3.3.1/dist/converse.min.js">converse.min.js</a>
+                        <a href="https://cdn.conversejs.org/7.0.2/dist/converse.min.js">converse.min.js</a>
                     </td>
                     <td>
                         <a href="https://www.mozilla.org/en-US/MPL/2.0/">MPL-2.0</a>

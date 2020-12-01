@@ -9,21 +9,40 @@ Troubleshooting and debugging
 General tips on debugging Converse
 ==================================
 
-When debugging Converse, always make sure that you pass in ``debug: true`` to
-the ``converse.initialize`` call.
+Enabling debug output
+---------------------
 
-Converse will then log debug information to the browser's developer console.
-Open the developer console and study the data that is logged to it.
+Converse has a :ref:`loglevel` configuration setting which lets you to turn on
+debug logging in the browser's developer console.
 
-`Strope.js <http://strophe.im/>`_ the underlying XMPP library which Converse
-uses, swallows errors, so that messaging can continue in cases where
+When debugging, you always want to make sure that this setting is set to
+``true`` when calling ``converse.initialize``.
+
+You can also enable debug output via the URL, which is useful when you don't
+have access to the server where Converse is hosted.
+
+To do so, add ``#converse?loglevel=debug`` to the URL in the browser's address bar.
+Make sure to first remove any already existing URL fragment (the URL fragment
+is the part that starts with a ``#``).
+
+With debug logging on, you can open the browser's developer console and study the
+data that is logged to it.
+
+In Chrome you can right click in the developer console and save its contents to
+a file for later study.
+
+What is logged at the debug loglevel?
+-------------------------------------
+
+`Strope.js <http://strophe.im/>`_, the underlying XMPP library which Converse
+uses, swallows errors so that messaging can continue in cases where
 non-critical errors occur.
 
 This is a useful feature and provides more stability, but it makes debugging
 trickier, because the app doesn't crash when something goes wrong somewhere.
 
-That's why checking the debug output in the browser console is so important. If
-something goes wrong somewhere, the error will be logged there and you'll be
+That's why checking the debug output in the browser console is important.
+If something goes wrong somewhere, the error will be logged there and you'll be
 able to see it.
 
 Additionally, Converse will in debug mode also log all XMPP stanzas
@@ -31,7 +50,7 @@ Additionally, Converse will in debug mode also log all XMPP stanzas
 This is very useful for debugging issues relating to the XMPP protocol.
 
 For example, if a message or presence update doesn't appear, one of the first
-things you can do is to set ``debug: true`` and then to check in the console
+things you can do is to set ``loglevel: debug`` and then to check in the console
 whether the relevant XMPP stanzas are actually logged (which would mean that
 they were received by Converse). If they're not logged, then the problem is
 more likely on the XMPP server's end (perhaps a misconfiguration?). If they
@@ -95,3 +114,28 @@ what you're using as the HTTP file server.
 CORS is enabled by adding an ``Access-Control-Allow-Origin`` header, so you'll
 have to configure your file server to add this header.
 
+
+Common errors
+=============
+
+Error: A "url" property or function must be specified
+-----------------------------------------------------
+
+That's a relatively generic `Skeletor <https://github.com/conversejs/skeletor>`_ (or `Backbone <http://backbonejs.org/>_`)
+error and by itself it usually doesn't give enough information to know how to fix the underlying issue.
+
+Generally, this error happens when a Model is being persisted (e.g. when model.save() is called,
+but there is no information specifying where/how it should be persisted.
+
+The Converse models are persisted to browser storage (e.g. sessionStorage, localStorage or IndexedDB),
+and this happens by adding a browserStorage attribute on the model, or on the collection containing the model.
+
+See for example here: https://github.com/conversejs/converse.js/blob/395aa8cb959bbb7e26472ed3356160c8044be081/src/headless/converse-chat.js#L359
+
+If this error occurs, it means that a model being persisted doesn't have the ``browserStorage`` attribute,
+and it's containing collection (if there is one) also doesn't have that attribute.
+
+This usually happens when a model has been removed from a collection, and then ``.save()`` is called on it.
+
+In the context of Converse it might mean that there's an attempt to persist data before all models have been properly initialized,
+or conversely after models have been removed from their containing collections.

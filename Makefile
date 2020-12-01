@@ -1,85 +1,85 @@
 # You can set these variables from the command line.
 BABEL			?= node_modules/.bin/babel
 BOOTSTRAP		= ./node_modules/
-BOURBON 		= ./node_modules/bourbon/app/assets/stylesheets/
 BUILDDIR		= ./docs
+KARMA			?= ./node_modules/.bin/karma
 CHROMIUM		?= ./node_modules/.bin/run-headless-chromium
 CLEANCSS		?= ./node_modules/clean-css-cli/bin/cleancss --skip-rebase
-ESLINT		  	?= ./node_modules/.bin/eslint
-HTTPSERVE	   	?= ./node_modules/.bin/http-server
+ESLINT			?= ./node_modules/.bin/eslint
+HTTPSERVE	 	?= ./node_modules/.bin/http-server
 HTTPSERVE_PORT	?= 8000
 INKSCAPE		?= inkscape
-INSTALL		?= install
-JSDOC			?=  ./node_modules/.bin/jsdoc
+INSTALL			?= install
+JSDOC			?=	./node_modules/.bin/jsdoc
 LERNA			?= ./node_modules/.bin/lerna
 OXIPNG			?= oxipng
-PAPER		   	=
-PO2JSON		 	?= ./node_modules/.bin/po2json
+PAPER		 	=
 RJS				?= ./node_modules/.bin/r.js
 NPX				?= ./node_modules/.bin/npx
 SASS			?= ./node_modules/.bin/node-sass
 SED				?= sed
 SPHINXBUILD	 	?= ./bin/sphinx-build
-SPHINXOPTS	  	=
-UGLIFYJS		?= node_modules/.bin/uglifyjs
+SPHINXOPTS		=
+XGETTEXT		= xgettext
 
 
 # Internal variables.
-ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) ./docs/source
+ALLSPHINXOPTS	= -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) ./docs/source
 VERSION_FORMAT	= [0-9]+\.[0-9]+\.[0-9]+
 
 .PHONY: all
-all: dev dist
+all: node_modules dist
 
 .PHONY: help
 help:
 	@echo "Please use \`make <target>' where <target> is one of the following:"
 	@echo ""
-	@echo " all             A synonym for 'make dev'."
-	@echo " build           Create minified builds of converse.js and all its dependencies."
-	@echo " clean           Remove all NPM packages."
-	@echo " check           Run all tests."
-	@echo " css             Generate CSS from the Sass files."
-	@echo " dev             Set up the development environment. To force a fresh start, run 'make clean' first."
-	@echo " html            Make standalone HTML files of the documentation."
-	@echo " po              Generate gettext PO files for each i18n language."
-	@echo " po2json         Generate JSON files from the language PO files."
-	@echo " pot             Generate a gettext POT file to be used for translations."
-	@echo " release         Prepare a new release of converse.js. E.g. make release VERSION=0.9.5"
-	@echo " serve           Serve this directory via a webserver on port 8000."
-	@echo " serve_bg        Same as \"serve\", but do it in the background"
-	@echo " stamp-npm       Install NPM dependencies"
-	@echo " watch           Watch for changes on JS and scss files and automatically update the generated files."
-	@echo " logo            Generate PNG logos of multiple sizes."
+	@echo " all         	Set up dev environment and create all builds"
+	@echo " dist       		Create minified builds of converse.js and all its dependencies."
+	@echo " clean       	Remove all NPM packages."
+	@echo " check       	Run all tests."
+	@echo " dev         	Set up the development environment and build unminified resources. To force a fresh start, run 'make clean' first."
+	@echo " devserver   	Set up the development environment and start the webpack dev server."
+	@echo " doc         	Make standalone HTML files of the documentation."
+	@echo " po          	Generate gettext PO files for each i18n language."
+	@echo " pot         	Generate a gettext POT file to be used for translations."
+	@echo " release     	Prepare a new release of converse.js. E.g. make release VERSION=0.9.5"
+	@echo " serve       	Serve this directory via a webserver on port 8000."
+	@echo " serve_bg    	Same as \"serve\", but do it in the background"
+	@echo " node_modules	Install NPM dependencies"
+	@echo " watch       	Watch for changes on JS and scss files and automatically update the generated files."
+	@echo " logo        	Generate PNG logos of multiple sizes."
 
 
 ########################################################################
 ## Miscellaneous
 
 .PHONY: serve
-serve: dev
+serve: node_modules dist
 	$(HTTPSERVE) -p $(HTTPSERVE_PORT) -c-1
 
 .PHONY: serve_bg
-serve_bg: dev
+serve_bg: node_modules
 	$(HTTPSERVE) -p $(HTTPSERVE_PORT) -c-1 -s &
 
 ########################################################################
 ## Translation machinery
 
-GETTEXT = xgettext --language="JavaScript" --keyword=__ --keyword=___ --from-code=UTF-8 --output=locale/converse.pot dist/converse-no-dependencies.js --package-name=Converse.js --copyright-holder="Jan-Carel Brand" --package-version=4.1.2 -c
+dist/converse-no-dependencies.js: src webpack.common.js webpack.nodeps.js @converse/headless node_modules
+	npm run nodeps
+
+GETTEXT = $(XGETTEXT) --from-code=UTF-8 --language=JavaScript --keyword=__ --keyword=___ --keyword=i18n_ --force-po --output=src/i18n/converse.pot --package-name=Converse.js --copyright-holder="Jan-Carel Brand" --package-version=7.0.2 dist/converse-no-dependencies.js -c
+
+src/i18n/converse.pot: dist/converse-no-dependencies.js
+	$(GETTEXT) 2>&1 > /dev/null; exit $$?;
+	rm dist/converse-no-dependencies.js
 
 .PHONY: pot
-pot: dist/converse-no-dependencies-es2015.js
-	$(GETTEXT) 2>&1 > /dev/null; exit $$?;
+pot: src/i18n/converse.pot
 
 .PHONY: po
 po:
-	find ./locale -maxdepth 1 -mindepth 1 -type d -exec msgmerge {}/LC_MESSAGES/converse.po ./locale/converse.pot -U \;
-
-.PHONY: po2json
-po2json:
-	find ./locale -maxdepth 1 -mindepth 1 -type d -exec $(PO2JSON) -f jed1.x -d converse {}/LC_MESSAGES/converse.po {}/LC_MESSAGES/converse.json \;
+	find ./src/i18n -maxdepth 1 -mindepth 1 -type d -exec msgmerge {}/LC_MESSAGES/converse.po ./src/i18n/converse.pot -U \;
 
 ########################################################################
 ## Release management
@@ -88,33 +88,24 @@ po2json:
 release:
 	$(SED) -i '/^_converse.VERSION_NAME =/s/=.*/= "v$(VERSION)";/' src/headless/converse-core.js
 	$(SED) -i '/Version:/s/:.*/: $(VERSION)/' COPYRIGHT
-	$(SED) -i '/Project-Id-Version:/s/:.*/: Converse.js $(VERSION)\n"/' locale/converse.pot
+	$(SED) -i '/Project-Id-Version:/s/:.*/: Converse.js $(VERSION)\n"/' src/i18n/converse.pot
+	$(SED) -i '/"version":/s/:.*/: "$(VERSION)",/' manifest.json
 	$(SED) -i '/"version":/s/:.*/: "$(VERSION)",/' package.json
 	$(SED) -i '/"version":/s/:.*/: "$(VERSION)",/' src/headless/package.json
 	$(SED) -ri 's/--package-version=$(VERSION_FORMAT)/--package-version=$(VERSION)/' Makefile
 	$(SED) -i -e "/version =/s/=.*/= '$(VERSION)'/" -e "/release =/s/=.*/= '$(VERSION)'/" docs/source/conf.py
 	$(SED) -i "s/[Uu]nreleased/`date +%Y-%m-%d`/" CHANGES.md
 	$(SED) -ri 's,cdn.conversejs.org/$(VERSION_FORMAT),cdn.conversejs.org/$(VERSION),' docs/source/quickstart.rst
+	$(SED) -ri 's,cdn.conversejs.org/$(VERSION_FORMAT),cdn.conversejs.org/$(VERSION),' *.html
+	$(SED) -ri 's,cdn.conversejs.org/$(VERSION_FORMAT),cdn.conversejs.org/$(VERSION),' demo/*.html
 	make pot
 	make po
-	make po2json
-	make build
-	mkdir -p 'converse-assets-$(VERSION)'
-	$(INSTALL) -D dist/converse.js 'converse-assets-$(VERSION)/converse.js'
-	$(INSTALL) -D dist/converse.min.js 'converse-assets-$(VERSION)/converse.min.js'
-	$(INSTALL) -D dist/converse.min.js.map 'converse-assets-$(VERSION)/converse.min.js.map'
-	$(INSTALL) -D dist/converse-headless.js 'converse-assets-$(VERSION)/converse-headless.js'
-	$(INSTALL) -D dist/converse-headless.min.js 'converse-assets-$(VERSION)/converse-headless.min.js'
-	$(INSTALL) -D dist/converse-headless.min.js.map 'converse-assets-$(VERSION)/converse-headless.min.js.map'
-	$(INSTALL) -D css/converse.css 'converse-assets-$(VERSION)/css/converse.css'
-	$(INSTALL) -D css/converse.min.css 'converse-assets-$(VERSION)/css/converse.min.css'
-	cp -r css/webfonts 'converse-assets-$(VERSION)/css/'
-	cp -r sounds 'converse-assets-$(VERSION)/'
-	find locale -type f -name '*.json' \
-		-exec $(INSTALL) -D '{}' 'converse-assets-$(VERSION)/{}' \;
-	zip -r 'converse-assets-$(VERSION).zip' 'converse-assets-$(VERSION)'
-	rm -rf 'converse-assets-$(VERSION)'
+	make dist
+	npm pack
 
+.PHONY: postrelease
+postrelease:
+	$(SED) -i '/^_converse.VERSION_NAME =/s/=.*/= "v$(VERSION)dev";/' src/headless/converse-core.js
 
 ########################################################################
 ## Install dependencies
@@ -122,68 +113,56 @@ release:
 $(LERNA):
 	npm install lerna
 
-stamp-npm: $(LERNA) package.json package-lock.json src/headless/package.json
-	$(LERNA) bootstrap --hoist
-	touch stamp-npm
+package-lock.json: package.json
+	npm install
+
+node_modules: $(LERNA) package.json package-lock.json src/headless/package.json src/headless/package-lock.json
+	npm run lerna
+	npm rebuild node-sass
 
 .PHONY: clean
 clean:
-	rm -rf node_modules stamp-npm
-	rm -f dist/*.min.js*
-	rm -f css/*.min.css
-	rm -f css/*.map
-	rm -f css/*.zip
-	rm -f *.zip
+	npm run clean
+	rm -rf lib bin include parts
 
 .PHONY: dev
-dev: stamp-npm
+dev: node_modules
+	npm run dev
+
+.PHONY: devserver
+devserver: node_modules
+	npm run serve
 
 ########################################################################
 ## Builds
 
-.PHONY: css
-css: dev sass/*.scss css/converse.css css/converse.min.css css/website.css css/website.min.css css/font-awesome.css
+dist/converse.js:: node_modules
+	npm run dev
 
-css/converse.css:: dev sass
-	$(SASS) --source-map true --include-path $(BOURBON) --include-path $(BOOTSTRAP) sass/converse.scss css/converse.css
+dist/converse.css:: node_modules
+	npm run dev
 
-css/website.css:: dev sass
-	$(SASS) --source-map true --include-path $(BOURBON) --include-path $(BOOTSTRAP) sass/website.scss $@
+dist/website.css:: node_modules sass
+	$(SASS) --source-map true --include-path $(BOOTSTRAP) sass/website.scss $@
 
-css/font-awesome.css:: dev sass
-	$(SASS) --source-map true --include-path $(BOURBON) --include-path $(BOOTSTRAP) sass/font-awesome.scss $@
-
-css/%.min.css:: css/%.css
-	make dev
-	$(CLEANCSS) $< > $@
-
-.PHONY: watchcss
-watchcss: dev
-	$(SASS) --watch --source-map true --include-path $(BOURBON) --include-path $(BOOTSTRAP) -o ./css/ ./sass/
-
-.PHONY: watchjs
-watchjs: dev dist/converse-headless.js
-	$(NPX)  webpack --mode=development  --watch
-
-.PHONY: watchjsheadless
-watchjsheadless: dev
-	$(NPX)  webpack --mode=development  --watch --type=headless
+dist/website.min.css:: node_modules dist/website.css
+	$(CLEANCSS) dist/website.css > $@
 
 .PHONY: watch
-watch: dev
-	make -j 3 watchcss  watchjsheadless watchjs
+watch: node_modules
+	npm run watch
 
 .PHONY: logo
 logo: logo/conversejs-transparent16.png \
-	  logo/conversejs-transparent19.png \
-	  logo/conversejs-transparent48.png \
-	  logo/conversejs-transparent128.png \
-	  logo/conversejs-transparent512.png \
-	  logo/conversejs-filled16.png \
-	  logo/conversejs-filled19.png \
-	  logo/conversejs-filled48.png \
-	  logo/conversejs-filled128.png \
-	  logo/conversejs-filled512.png \
+		logo/conversejs-transparent19.png \
+		logo/conversejs-transparent48.png \
+		logo/conversejs-transparent128.png \
+		logo/conversejs-transparent512.png \
+		logo/conversejs-filled16.png \
+		logo/conversejs-filled19.png \
+		logo/conversejs-filled48.png \
+		logo/conversejs-filled128.png \
+		logo/conversejs-filled512.png \
 
 logo/conversejs-transparent%.png:: logo/conversejs-transparent.svg
 	$(INKSCAPE) -e $@ -w $* $<
@@ -193,63 +172,59 @@ logo/conversejs-filled%.png:: logo/conversejs-filled.svg
 	$(INKSCAPE) -e $@ -w $* $<
 	$(OXIPNG) $@
 
-BUILDS = dist/converse.js \
-	dist/converse.min.js \
-	dist/converse-headless.js \
-	dist/converse-headless.min.js \
-	dist/converse-no-dependencies.min.js \
-	dist/converse-no-dependencies.js \
-	dist/converse-no-dependencies-es2015.js
-
-dist/converse.js: src webpack.config.js stamp-npm @converse/headless
-	$(NPX)  webpack --mode=development
-dist/converse.min.js: src webpack.config.js stamp-npm @converse/headless
-	$(NPX)  webpack --mode=production
-dist/converse-headless.js: src webpack.config.js stamp-npm @converse/headless
-	$(NPX)  webpack --mode=development --type=headless
-dist/converse-headless.min.js: src webpack.config.js stamp-npm @converse/headless
-	$(NPX)  webpack --mode=production --type=headless
-dist/converse-no-dependencies.js: src webpack.config.js stamp-npm @converse/headless
-	$(NPX)  webpack --mode=development --type=nodeps
-dist/converse-no-dependencies.min.js: src webpack.config.js stamp-npm @converse/headless
-	$(NPX)  webpack --mode=production --type=nodeps
-dist/converse-no-dependencies-es2015.js: src webpack.config.js stamp-npm @converse/headless
-	$(NPX)  webpack --mode=development --type=nodeps --lang=es2015
-
 @converse/headless: src/headless
 
-.PHONY: dist
-dist:: build
+src/headless/dist/converse-headless.min.js: src webpack.common.js node_modules @converse/headless
+	npm run headless
 
-.PHONY: build
-build:: dev css $(BUILDS)
+dist:: node_modules src/* | dist/converse.js dist/converse.css dist/website.css dist/website.min.css
+	npm run prod
+
+.PHONY: install
+install:: dist
+
+.PHONY: cdn
+cdn:: node_modules
+	npm run cdn
 
 ########################################################################
 ## Tests
 
 .PHONY: eslint
-eslint: stamp-npm
-	$(ESLINT) src/
-	$(ESLINT) spec/
+eslint: node_modules
+	$(ESLINT) src/*.js
+	$(ESLINT) src/utils/*.js
+	$(ESLINT) src/headless/*.js
+	$(ESLINT) src/headless/utils/*.js
+	$(ESLINT) spec/ --global converse
 
 .PHONY: check
-check: dist/converse.js eslint
-	LOG_CR_VERBOSITY=INFO $(CHROMIUM) --disable-gpu --no-sandbox http://localhost:$(HTTPSERVE_PORT)/tests/index.html
+check: eslint | dist/converse.js dist/converse.css
+	$(KARMA) start karma.conf.js $(ARGS)
+
+.PHONY: test
+test:
+	$(KARMA) start karma.conf.js $(ARGS)
 
 ########################################################################
 ## Documentation
 
 ./bin/activate:
-	virtualenv .
+	python3 -m venv .
 
 .installed.cfg: requirements.txt buildout.cfg
 	./bin/pip install -r requirements.txt
+	./bin/pip install --upgrade pip==19.2.1
+	./bin/pip install --upgrade setuptools==41.0.1
 	./bin/buildout -v
 
 docsdev: ./bin/activate .installed.cfg
 
 .PHONY: html
-html: dev docsdev apidoc
+html: doc
+
+.PHONY: doc
+doc: node_modules docsdev apidoc
 	rm -rf $(BUILDDIR)/html
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	make apidoc
@@ -258,4 +233,4 @@ html: dev docsdev apidoc
 
 PHONY: apidoc
 apidoc:
-	$(JSDOC) --readme docs/source/jsdoc_intro.md -c docs/source/conf.json -d docs/html/api src/*.js
+	$(JSDOC) --private --readme docs/source/jsdoc_intro.md -c docs/source/conf.json -d docs/html/api src/templates/**/*.js src/*.js src/**/*.js src/headless/**/*.js src/shared/**/*.js

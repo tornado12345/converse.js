@@ -5,7 +5,6 @@
  * Copyright (c) 2013-2018, JC Brand <jc@opkode.com>
  * Licensed under the Mozilla Public License
  */
-@import "font-awesome";
 @import "bootstrap/scss/functions";
 @import "bootstrap/scss/variables";
 @import "bootstrap/scss/mixins";
@@ -24,9 +23,6 @@
     @import "bootstrap/scss/input-group";
     @import "bootstrap/scss/custom-forms";
     @import "bootstrap/scss/nav";
-    @import "bootstrap/scss/navbar";
-    @import "bootstrap/scss/card";
-    @import "bootstrap/scss/breadcrumb";
     @import "bootstrap/scss/badge";
     @import "bootstrap/scss/alert";
     @import "bootstrap/scss/media";
@@ -38,11 +34,12 @@
     @import "bootstrap/scss/utilities";
 }
 
-@import "bourbon";
+@import "font-awesome";
 @import "variables";
 
 @import "core";
 @import "forms";
+@import "toolbar";
 @import "chatbox";
 @import "controlbox";
 @import "modal";
@@ -53,5 +50,5 @@
 @import "messages";
 @import "minimized_chats";
 @import "bookmarks";
-@import "awesomplete";
-@import "embedded";
+@import "autocomplete";
+@import "emoji";

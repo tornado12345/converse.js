@@ -18,10 +18,6 @@ an example of how this is done, please see the bottom of the *./index.html* page
 Please refer to the `Configuration settings`_ section below for info on
 all the available configuration settings.
 
-After you have configured Converse, you'll have to regenerate the minified
-JavaScript file so that it will include the new settings. Please refer to the
-:ref:`minification` section for more info on how to do this.
-
 .. _`configuration-settings`:
 
 Configuration settings
@@ -39,8 +35,8 @@ login
 ~~~~~
 
 The default means is ``login``, which means that the user either logs in manually with their
-username and password, or automatically if used together with ``auto_login=true``
-and ``jid`` and ``password`` values. See `auto_login`_.
+username and password, or automatically if used together with `auto_login`_ set to ``true``
+and ``jid`` and ``password`` values.
 
 external
 ~~~~~~~~
@@ -66,6 +62,8 @@ as soon as the page loads.
 
 The server's domain is passed in via the `jid`_ setting.
 
+.. _`prebind`:
+
 prebind
 ~~~~~~~
 
@@ -85,30 +83,30 @@ A JID (jabber ID), SID (session ID) and RID (Request ID).
 
 Converse needs these tokens in order to attach to that same session.
 
-There are two complementary configuration settings to ``prebind``.
-They are :ref:`keepalive` and `prebind_url`_.
+In addition to setting `authentication`_ to ``prebind``, you'll also need to
+set the `prebind_url`_ and `bosh-service-url`_.
 
-``keepalive`` can be used keep the session alive without having to pass in
-new RID and SID tokens to ``converse.initialize`` every time you reload the page.
-This removes the need to set up a new BOSH session every time a page loads.
-You do however still need to supply the user's JID so that Converse can be
-sure that the session it's resuming is for the right user.
-
-`prebind_url`_ lets you specify a URL which Converse will call whenever a
-new BOSH session needs to be set up.
-
-Here's an example of Converse being initialized with these three options:
+Here's an example of Converse being initialized with these options:
 
 .. code-block:: javascript
 
     converse.initialize({
         bosh_service_url: 'https://bind.example.com',
-        keepalive: true,
         jid: 'me@example.com',
         authentication: 'prebind',
         prebind_url: 'http://example.com/api/prebind',
+        auto_login: true,
         allow_logout: false
     });
+
+
+allow_adhoc_commands
+--------------------
+
+* Default:  ``true``
+
+Allows privileged users to run XEP-0050 Ad-Hoc commands via the settings modal.
+
 
 allow_bookmarks
 ---------------
@@ -161,6 +159,39 @@ allow_logout
 
 Determines whether the user is allowed to log out. If set to ``false``, there will be no logout button.
 
+
+.. _`allow_message_corrections`:
+
+allow_message_corrections
+-------------------------
+
+* Default:  ``'all'``
+* Possible values: ``'all'``, ``'last'``
+
+Configures the last message correction (LMC) feature of Converse. By default you can edit all of your own
+messages. Setting this to ``'last'`` will limit this feature to the message sent most recently as suggested by
+`XEP-0308: Last Message Correction <https://xmpp.org/extensions/xep-0308.html>`_.
+Setting it to anything else (including ``false``) will disable the ability to correct sent messages.
+
+
+allow_message_retraction
+------------------------
+
+* Default:  ``'all'``
+* Possible values: ``'all'``, ``'own'``, ``'moderator'`` or any falsy value
+
+Determines who is allowed to retract messages. If set to ``'all'``, then normal
+users may retract their own messages and ``'moderators'`` may retract the messages of
+other users.
+
+allow_message_styling
+---------------------
+
+* Default:  ``true``
+* Possible values: ``true``, ``false``
+
+Determines wehether support for XEP-0393 Message Styling hints are enabled or not.
+
 allow_muc
 ---------
 
@@ -187,17 +218,10 @@ allow_non_roster_messaging
 
 Determines whether you'll receive messages from users that are not in your
 roster. The XMPP specification allows for this (similar to email).
-Setting this to `true` increases your chances of receiving spam (when using a
-federated server), while setting it to `false` means that people not on your
+Setting this to ``true`` increases your chances of receiving spam (when using a
+federated server), while setting it to ``false`` means that people not on your
 roster can't contact you unless one (or both) of you subscribe to one another's
 presence (i.e. adding as a roster contact).
-
-allow_otr
----------
-
-* Default:  ``true``
-
-Allow Off-the-record encryption of single-user chat messages.
 
 allow_public_bookmarks
 ----------------------
@@ -212,7 +236,7 @@ Even though Converse asks for the bookmarks to be kept private (via the
 and publishes the node contents under the default privacy setting, which makes
 the information available to all roster contacts.
 
-If your your XMPP server does not support `XEP-0223`'s ``#publish-options``
+If your XMPP server does not support `XEP-0223`'s ``#publish-options``
 feature and you don't mind that your room bookmarks are visible to all
 contacts, then you can set this setting to ``true``. Otherwise you won't be
 able to have any room bookmarks at all for an account on that XMPP server.
@@ -226,12 +250,34 @@ Support for `XEP-0077: In band registration <https://xmpp.org/extensions/xep-007
 
 Allow XMPP account registration showing the corresponding UI register form interface.
 
-animate
--------
 
-* Default:  ``true``
+allow_user_trust_override
+-------------------------
 
-Show animations, for example when opening and closing chatboxes.
+* Default: ``true``
+* Allowed values: ``true``, ``false``, ``off``
+
+This setting determines whether a user may decide whether
+Converse is ``trusted`` or not (e.g. in the particular browser).
+
+This is done via a *This is a trusted device* checkbox in the login form.
+If this setting is set to ``true`` or ``off``, the checkbox will be shown to the user, otherwise not.
+
+When this setting is set to ``true``, the checkbox will be checked by default.
+To not have it checked by default, set this setting to ``off``.
+
+If the user indicates that this device/browser is not trusted, then effectively
+it's the same as setting `clear_cache_on_logout`_ to ``true``
+and `persistent_store`_ to ``sessionStorage``.
+
+``sessionStorage`` only persists while the current tab or window containing a Converse instance is open.
+As soon as it's closed, the data is cleared.
+
+The data that is cached (or cleared) includes your sent and received messages, which chats you had
+open, what features the XMPP server supports and what your online status was.
+
+Clearing the cache makes Converse much slower when the user logs in again, because all data needs to be fetch anew.
+
 
 archived_messages_page_size
 ---------------------------
@@ -249,6 +295,29 @@ available) and the amount returned will be no more than the page size.
 
 You will be able to query for even older messages by scrolling upwards in the chatbox or room
 (the so-called infinite scrolling pattern).
+
+autocomplete_add_contact
+------------------------
+
+* Default: ``true``
+
+Determines whether search suggestions are shown in the "Add Contact" modal.
+
+
+auto_focus
+----------
+
+* Default:  ``true``
+
+If set to ``true``, the textarea for composing chat messages will automatically
+become focused as soon as a chat is opened. This means you don't need to click
+the textarea first before starting to type a message. This also applies to the
+username field which is automatically focused after the login controlbox is
+loaded.
+
+For applications where chat is not the main feature, automatic focus of the
+chat box might be undesired.
+
 
 auto_list_rooms
 ---------------
@@ -279,24 +348,40 @@ auto_login
 This option can be used to let Converse automatically log the user in as
 soon as the page loads.
 
-It should be used either with ``authentication`` set to ``anonymous`` or to ``login``.
-
-If ``authentication`` is set to ``login``, then you will also need to provide a
+If `authentication`_ is set to ``login``, then you will also need to provide a
 valid ``jid`` and ``password`` values, either manually by passing them in, or
 by the `credentials_url`_ setting. Setting a ``credentials_url`` is preferable
 to manually passing in ``jid`` and ``password`` values, because it allows
-better reconnection with ``auto_reconnect``. When the connection drops,
+better reconnection with `auto_reconnect`_. When the connection drops,
 Converse will automatically fetch new login credentials from the
 ``credentials_url`` and reconnect.
 
-If ``authentication`` is set to ``anonymous``, then you will also need to provide the
+If `authentication`_ is set to ``anonymous``, then you will also need to provide the
 server's domain via the `jid`_ setting.
 
 This is a useful setting if you'd like to create a custom login form in your
 website. You'll need to write some JavaScript to accept that custom form's
 login credentials, then you can pass those credentials (``jid`` and
 ``password``) to ``converse.initialize`` to start Converse and log the user
-into their XMPP account.
+in to their XMPP account.
+
+.. note::
+
+  The interaction between ``keepalive`` and ``auto_login`` is unfortunately
+  inconsistent depending on the `authentication`_ method used.
+
+  If ``auto_login`` is set to ``false`` and `authentication`_ is set to
+  ``anonymous``, ``external`` or ``prebind``, then Converse won't automatically
+  log the user in.
+
+  If `authentication`_ set to ``login`` the situation is much more
+  ambiguous, since we don't have a way to distinguish between wether we're
+  restoring a previous session (``keepalive``) or whether we're
+  automatically setting up a new session (``auto_login``).
+
+  So currently if EITHER ``keepalive`` or ``auto_login`` is ``true`` and
+  `authentication`_ is set to ``login``, then Converse will try to log the user in.
+
 
 auto_away
 ---------
@@ -328,13 +413,13 @@ auto_reconnect
 Automatically reconnect to the XMPP server if the connection drops
 unexpectedly.
 
-This option works best when you have `authentication` set to `prebind` and have
-also specified a `prebind_url` URL, from where Converse can fetch the BOSH
+This option works best when you have `authentication`_ set to ``prebind`` and have
+also specified a ``prebind_url`` URL, from where Converse can fetch the BOSH
 tokens. In this case, Converse will automaticallly reconnect when the
 connection drops but also reestablish earlier lost connections (due to
 network outages, closing your laptop etc.).
 
-When `authentication` is set to `login`, then this option will only work when
+When `authentication`_ is set to `login`, then this option will only work when
 the page hasn't been reloaded yet, because then the user's password has been
 wiped from memory. This configuration can however still be useful when using
 Converse in desktop apps, for example those based on `CEF <https://bitbucket.org/chromiumembedded/cef>`_
@@ -363,6 +448,7 @@ auto_join_on_invite
 * Default:  ``false``
 
 If true, the user will automatically join a chatroom on invite without any confirm.
+Also inviting users won't be prompted for a reason.
 
 
 auto_join_private_chats
@@ -388,11 +474,11 @@ automatically joined once the user has logged in.
 
 You can either specify a simple list of room JIDs, in which case your nickname
 will be taken from your JID, or you can specify a list of maps, where each map
-specifies the room's JID and the nickname that should be used.
+specifies the room's JID and other options.
 
 For example::
 
-    `[{'jid': 'room@example.org', 'nick': 'WizardKing69' }]`
+    `[{'jid': 'room@example.org', 'nick': 'WizardKing69', 'minimized': true }]`
 
 
 blacklisted_plugins
@@ -413,6 +499,7 @@ plugins from registering themselves under those names.
 
 The core, and by default whitelisted, plugins are::
 
+    converse-bosh
     converse-bookmarks
     converse-chatboxes
     converse-chatview
@@ -427,15 +514,15 @@ The core, and by default whitelisted, plugins are::
     converse-muc
     converse-muc-embedded
     converse-notification
-    converse-otr
     converse-ping
     converse-profile
     converse-register
     converse-roomslist
     converse-rosterview
     converse-singleton
+    converse-smacks
     converse-spoilers
-    converse-vcard'
+    converse-vcard
 
 Example:
 
@@ -454,10 +541,15 @@ Example:
 
 .. _`bosh-service-url`:
 
+
 bosh_service_url
 ----------------
 
 * Default: ``undefined``
+
+Example: ``http://xmpp.example.com:5280/bosh/``
+
+Example with reverse-proxy and TLS: ``https://xmpp.example.com/bosh/``
 
 To connect to an XMPP server over HTTP you need a `BOSH <https://en.wikipedia.org/wiki/BOSH>`_
 connection manager which acts as a middle man between the HTTP and XMPP
@@ -471,28 +563,40 @@ For more information, read this blog post: `Which BOSH server do you need? <http
 A more modern alternative to BOSH is to use `websockets <https://developer.mozilla.org/en/docs/WebSockets>`_.
 Please see the :ref:`websocket-url` configuration setting.
 
-cache_otr_key
--------------
 
-* Default:  ``false``
+clear_cache_on_logout
+---------------------
 
-Let the `OTR (Off-the-record encryption) <https://otr.cypherpunks.ca>`_ private
-key be cached in your browser's session storage.
+* Default: ``false``
 
-The browser's session storage persists across page loads but is deleted once
-the tab or window is closed.
+If set to ``true``, all locally cached data will be cleared when the user logs out,
+regardless of the `persistent_store`_ being used (``localStorage``, ``IndexedDB`` or ``sessionStorage``).
 
-If this option is set to ``false``, a new OTR private key will be generated
-for each page load. While more inconvenient, this is a much more secure option.
+*Note*: If `allow_user_trust_override`_ is set to ``true`` and the user
+indicates that this device/browser is **not** trusted, then the cache will be
+cleared on logout, even if this setting is set to ``true``.
 
-This setting can only be used together with ``allow_otr = true``.
+*Note*: If this setting is set to ``true``, then OMEMO will be disabled, since
+otherwise it won't be possible to decrypt archived messages that were
+already decrypted previously (due to forward security).
 
-.. note::
-    A browser window's session storage is accessible by all javascript that
-    is served from the same domain. So if there is malicious javascript served by
-    the same server (or somehow injected via an attacker), then they will be able
-    to retrieve your private key and read your all the chat messages in your
-    current session. Previous sessions however cannot be decrypted.
+
+clear_messages_on_reconnection
+------------------------------
+
+* Default: ``false``
+
+In some cases, it might be desirable to clear cached chat messages once you've
+reconnected to the XMPP server.
+
+For example, if you want to prevent the chat history from getting too long or
+if you want to avoid gaps in the chat history (for example due to MAM not
+returning all messages since the last cached message).
+
+Beware, if you're using OMEMO, then you probably don't want to set this setting to
+``true``. OMEMO messages can be decrypted only once, so if they then
+subsequently get cleared, you won't get the plaintext back.
+
 
 chatstate_notification_blacklist
 --------------------------------
@@ -527,6 +631,9 @@ For documentation on the configuration options that ``Strophe.Connection``
 accepts, refer to the
 `Strophe.Connection documentation <http://strophe.im/strophejs/doc/1.2.8/files/strophe-js.html#Strophe.Connection.Strophe.Connection>`_.
 
+Restricting the supported authentication mechanisms:
+****************************************************
+
 As an example, suppose you want to restrict the supported SASL authentication
 mechanisms, then you'd pass in the ``mechanisms`` as a ``connection_options``
 ``key:value`` pair:
@@ -538,8 +645,28 @@ mechanisms, then you'd pass in the ``mechanisms`` as a ``connection_options``
                 'mechanisms': [
                     converse.env.Strophe.SASLMD5,
                 ]
-            },
+            }
         });
+
+Running the XMPP Connection inside a shared worker
+**************************************************
+
+Newer versions of Strophe.js, support the ability to run the XMPP Connection
+inside a `shared worker <https://developer.mozilla.org/en-US/docs/Web/API/SharedWorker>`_ that's shared
+between open tabs in the browser in which Converse is running (and which have the same domain).
+
+*Note:* This feature is experimental and there currently is no way to
+synchronize actions between tabs. For example, sent 1-on-1 messages aren't
+reflected by the server, so you if you send such a message in one tab, it won't
+appear in another.
+
+
+.. code-block:: javascript
+
+        converse.initialize({
+            connection_options: { 'worker': true }
+        });
+
 
 .. _`credentials_url`:
 
@@ -549,15 +676,18 @@ credentials_url
 * Default:  ``null``
 * Type:  URL
 
-This setting should be used in conjunction with ``authentication`` set to ``login`` and :ref:`keepalive` set to ``true``.
+This setting should be used in conjunction with `authentication`_ set to ``login``.
 
 It allows you to specify a URL which Converse will call when it needs to get
 the username and password (or authentication token) which Converse will use
 to automatically log the user in.
 
-If ``auto_reconnect`` is also set to true, then Converse will automatically
+If `auto_reconnect`_ is also set to ``true``, then Converse will automatically
 fetch new credentials from the ``credentials_url`` whenever the connection or
 session drops, and then attempt to reconnect and establish a new session.
+
+If the request to the ``credentials_url`` URL fails for whatever reason,
+Converse will continuously retry to fetch the credentials every 2 seconds.
 
 The server behind ``credentials_url`` should return a JSON encoded object::
 
@@ -583,14 +713,15 @@ a chat state indication of ``active`` will be sent out.
 
 A value of ``0`` means that this feature is disabled.
 
-debug
------
+.. _`loglevel`:
 
-* Default:  ``false``
+loglevel
+--------
 
-If set to ``true``, debugging output will be logged to the browser console.
+* Default:  ``'info'``
+* Allowed values: ``'debug'``, ``'info'``, ``'warn'``, ``'error'``, ``'fatal'``
 
-You can also set this value by changing the URL fragment to `#converse?debug=true` or `#converse?debug=false`.
+You can also set this value by changing a URL fragment `#converse?loglevel=debug`
 
 
 default_domain
@@ -625,6 +756,23 @@ The default chat status that the user wil have. If you for example set this to
 ``'chat'``, then Converse will send out a presence stanza with ``"show"``
 set to ``'chat'`` as soon as you've been logged in.
 
+
+discover_connection_methods
+---------------------------
+
+* Default: ``true``
+
+Use `XEP-0156 <https://xmpp.org/extensions/xep-0156.html>`_ to discover whether
+the XMPP host for the current user advertises any Websocket or BOSH connection
+URLs that can be used.
+
+If this is set to ``false``, then a `websocket_url`_ or `bosh_service_url`_ need to be
+set.
+
+Currently only the XML encoded host-meta resource is supported as shown in
+`Example 2 under section 3.3 <https://xmpp.org/extensions/xep-0156.html#httpexamples>`_.
+
+
 domain_placeholder
 ------------------
 
@@ -633,6 +781,71 @@ domain_placeholder
 The placeholder text shown in the domain input on the registration form.
 
 
+emoji_categories
+----------------
+
+* Default:
+
+::
+
+    {
+      "smileys": ":grinning:",
+      "people": ":thumbsup:",
+      "activity": ":soccer:",
+      "travel": ":motorcycle:",
+      "objects": ":bomb:",
+      "nature": ":rainbow:",
+      "food": ":hotdog:",
+      "symbols": ":musical_note:",
+      "flags": ":flag_ac:",
+      "custom": ":converse:"
+    }
+
+
+This setting lets you define the categories that are available in the emoji
+picker, as well as the default image that's shown for each category.
+
+The keys of the map are the categories and the values are the shortnames of the
+representative images.
+
+If you want to remove a category, don't just remove the key, instead set its
+value to ``undefined``.
+
+Due to restrictions intended to prevent addition of undeclared configuration
+settings, it's not possible to add new emoji categories. There is however a
+``custom`` category where you can put your own custom emojis (also known as
+"stickers").
+
+To add custom emojis, you need to edit ``src/headless/emojis.json`` to add new
+entries to the map under the  ``custom`` key.
+
+
+emoji_categories_label
+----------------------
+
+* Default:
+
+::
+
+    {
+      "smileys": "Smileys and emotions",
+      "people": "People",
+      "activity": "Activities",
+      "travel": "Travel",
+      "objects": "Objects",
+      "nature": "Animals and nature",
+      "food": "Food and drink",
+      "symbols": "Symbols",
+      "flags": "Flags",
+      "custom": "Stickers"
+    }
+
+
+This setting lets you pass in the text value that goes into the `title`
+attribute for the emoji categories. These strings will be translated, but for
+your custom text to be translatable, you'll need to wrap it in `__()``
+somewhere in your own code.
+
 emoji_image_path
 ----------------
 
@@ -640,10 +853,6 @@ emoji_image_path
 
 When `use_system_emojis`_ is set to ``false``, then this is the URL from where image files for
 displaying emojis will be fetched.
-
-If you've run ``make dev``, then these files are also available in ``./node_modules/twemoji/2/``,
-which means you can avoid the CDN and host them yourself if you wish.
-
 
 enable_muc_push
 ---------------
@@ -660,17 +869,16 @@ The app servers are specified with the `push_app_servers`_ option.
     Registering a push app server against a MUC domain is not (yet) standardized
     and this feature should be considered experimental.
 
-expose_rid_and_sid
-------------------
+enable_smacks
+-------------
 
-* Default:  ``false``
+* Default: ``false``
 
-Allow the prebind tokens, RID (request ID) and SID (session ID), to be exposed
-globally via the API. This allows other scripts served on the same page to use
-these values.
+Determines whether `XEP-0198 Stream Management <https://xmpp.org/extensions/xep-0198.html>`_
+support is turned on or not.
 
-*Beware*: a malicious script could use these tokens to assume your identity
-and inject fake chat messages.
+Recommended to set to ``true`` if a websocket connection is used.
+Please see the :ref:`websocket-url` configuration setting.
 
 filter_by_resource
 ------------------
@@ -681,23 +889,12 @@ Before version 1.0.3 Converse would ignore received messages if they were
 intended for a different resource then the current user had. It was decided to
 drop this restriction but leave it configurable.
 
-forward_messages
-----------------
+filter_url_query_params
+-----------------------
 
-* Default:  ``false``
+* Default: ``null``
 
-If set to ``true``, sent messages will also be forwarded to the sending user's
-bare JID (their Jabber ID independent of any chat clients aka resources).
-
-This means that sent messages are visible from all the user's chat clients,
-and not just the one from which it was actually sent.
-
-This is especially important for web chat, such as Converse, where each
-browser tab functions as a separate chat client, with its own resource.
-
-This feature uses Stanza forwarding, see also `XEP 0297: Stanza Forwarding <http://www.xmpp.org/extensions/xep-0297.html>`_
-
-For an alternative approach, see also `message_carbons`_.
+Accepts a string or array of strings. Any query strings from URLs that match this setting will be removed.
 
 fullname
 --------
@@ -706,7 +903,7 @@ If you are using prebinding, can specify the fullname of the currently
 logged in user, otherwise the user's vCard will be fetched.
 
 geouri_regex
-----------------
+------------
 
 * Default:  ``/https:\/\/www.openstreetmap.org\/.*#map=[0-9]+\/([\-0-9.]+)\/([\-0-9.]+)\S*/g``
 
@@ -720,17 +917,25 @@ geouri_replacement
 String used to replace geo-URIs with. Ought to be a link to osm or similar. ``$1`` and ``$2`` is replaced by
 latitude and longitude respectively.
 
+hide_muc_participants
+---------------------
+
+* Default:  ``false``
+
+Option which allows you to hide the participants list by default.
+
+
 hide_offline_users
 ------------------
 
 * Default:  ``false``
 
-If set to ``true``, then don't show offline users.
+If set to ``true``, then offline users aren't shown in the roster.
 
 hide_open_bookmarks
 -------------------
 
-* Default:  ``false`` (``true`` when the :ref:`view_mode` is set to ``fullscreen``).
+* Default:  ``false`` (``true`` when the `view_mode`_ is set to ``fullscreen``).
 
 This setting applies to the ``converse-bookmarks`` plugin and specfically the
 list of bookmarks shown in the ``Rooms`` tab of the control box.
@@ -752,14 +957,13 @@ i18n
 
 Specify the locale/language.
 
-The translations for that locale must be available in JSON format at the
-`locales_url`_
+The translations for that locale must be served in JSON format at `/dist/locales/${i18n}-LC_MESSAGES-converse-po.js`.
+The default webpack configuration for Converse.js ensures that these files are
+generated and placed in the right location.
 
 If an explicit locale is specified via the ``i18n`` setting and the
-translations for that locale are not found at the `locales_url``, then 
-then Converse will fall back to trying to determine the browser's language
-and fetching those translations, or if that fails the default English texts
-will be used.
+translations for that locale are not found, then Converse will fall back to trying to determine the browser's language
+and fetching those translations, or if that fails the default English strings will be used.
 
 idle_presence_timeout
 ---------------------
@@ -771,6 +975,17 @@ and an idle presence according to XEP-0319 is sent.
 
 If the given value is negative or ``0``, this feature is disabled.
 
+image_urls_regex
+----------------
+
+* Default: ``null``
+
+Any URL in a message that matches the regex in this setting will be considered an image and rendered, if `show_images_inline`_ is set to ``true``.
+If the image cannot be rendered, a hyperlink will be rendered instead.
+
+
+For example, to render Imgur images inline, you can use the following regex: ``/^https?:\/\/(?:www.)?(?:imgur\.com\/\w{7})\/?$/i``
+
 jid
 ---
 
@@ -778,9 +993,8 @@ The Jabber ID or "JID" of the current user. The JID uniquely identifies a user
 on the XMPP network. It looks like an email address, but it's used for instant
 messaging instead.
 
-This value needs to be provided when using the :ref:`keepalive` option together
-with `prebind`_.
-
+This value may be provided together with a ``password`` instead of supplying a
+`credentials_url`_ when setting ``auto_login`` to ``true``.
 
 .. _`keepalive`:
 
@@ -789,25 +1003,7 @@ keepalive
 
 * Default:    ``true``
 
-Determines whether Converse will maintain the chat session across page
-loads.
-
-This setting should also be used in conjunction with ``authentication`` set to `prebind`_.
-
-When using ``keepalive`` and ``prebind``, you will have to provide the `jid`_
-of the current user to ensure that a cached session is only resumed if it
-belongs to the current user.
-
-See also:
-
-* :ref:`session-support`
-
-.. note::
-    Currently the "keepalive" setting only works with BOSH and not with
-    websockets. This is because XMPP over websocket does not use the same
-    session token as with BOSH. A possible solution for this is to implement
-    `XEP-0198 <https://xmpp.org/extensions/xep-0198.html>`_, specifically
-    with regards to "stream resumption".
+Determines whether Converse will attempt to keep you logged in across page loads.
 
 .. _`locales`:
 
@@ -832,37 +1028,6 @@ therefore what may be given as value for the :ref:`i18n` option.
 
 Any other locales will be ignored.
 
-When self-hosting, also make sure that the locales are served and therefore
-fetchable (via ``XMLHttpRequest``) at the URL specified by :ref:`locales-url`.
-
-.. _`locales-url`:
-
-locales_url
------------
-
-* Default: ``/locale/{{{locale}}}/LC_MESSAGES/converse.json``,
-
-The URL from where Converse should fetch translation JSON.
-
-The three curly braces ``{{{ }}}`` are
-`Mustache <https://github.com/janl/mustache.js#readme>`_-style
-variable interpolation which HTML-escapes the value being inserted. It's
-important that the inserted value is HTML-escaped, otherwise a malicious script
-injection attack could be attempted.
-
-The variable being interpolated via the curly braces is ``locale``, which is
-the value passed in to the `i18n`_ setting, or the browser's locale or the
-default local or `en` (resolved in that order).
-
-From version 3.3.0, Converse no longer bundles all translations into its
-final build file. Instead, only the relevant translations are fetched at
-runtime.
-
-This change also means that it's no longer possible to pass in the translation
-JSON data directly into ``_converse.initialize`` via the `i18n`_ setting.
-Instead, you only specify the language code (e.g. `de`) and that language's
-JSON translations will automatically be fetched via XMLHTTPRequest at
-``locales_url``.
 
 locked_domain
 -------------
@@ -881,10 +1046,78 @@ locked_muc_domain
 -----------------
 
 * Default: ``false``
+* Allowed values: ``false``, ``true``, ``'hidden'``
 
-This setting allows you to restrict the multi-user chat (MUC) domain to only the value
+By setting this value to something truthy, you restrict the multi-user chat (MUC) domain to only the value
 specified in `muc_domain`_.
 
+If the value is set to `'hidden'` (which is also truthy), then the MUC domain
+will not be shown to users.
+
+locked_muc_nickname
+-------------------
+
+* Default: ``false``
+
+This setting allows you to restrict the multi-user chat (MUC) nickname that a
+user uses to a particular value.
+
+Where the nickname value comes from depends on other settings.
+
+The `nickname`_ configuration setting takes precedence ahead of any other
+nickname value. If that's not set, then the "nickname" value from the user's
+VCard is taken, and if that is not set but `muc_nickname_from_jid`_ is set to
+``true``, then the node of the user's JID (the part before the ``@``) is used.
+
+If no nickame value is found, then an error will be raised.
+
+muc_hats
+-------------------
+
+* Default: ``['xep317']``
+
+Since version 7 Converse now has rudimentary support for `XEP-0317 Hats <https://xmpp.org/extensions/xep-0317.html>`_.
+
+It is also possible to display VCard roles, MUC affiliation and MUC role along with hats.
+By default only XEP-0317 hats are considered.
+For the inclusion of VCard roles ``'vcard_roles'`` must be added to the list.
+For the inclusion of MUC affiliation and MUC role, the specific affiliations and roles
+to be used must be added to the list e.g. ``'owner','participant'``.
+
+Example:
+
+For XEP-0317 hats and VCard roles this setting should be set to:
+``'muc_hats': ['xep317', 'vcard_roles']``
+
+For VCard roles, admin MUC affiliation and moderator MUC role:
+``'muc_hats': ['vcard_roles', 'admin', 'moderator']``
+
+And to prevent the displaying of anything, an empty list must be used:
+``'muc_hats': []``
+
+
+muc_mention_autocomplete_min_chars
+-----------------------------------
+
+* Default:  ``0``
+
+The number of characters that need to be entered before the auto-complete list
+of matching nicknames is shown.
+
+muc_mention_autocomplete_filter
+-------------------------------
+
+* Default:  ``contains``
+
+The method used for filtering MUC participants when using auto-complete.
+Valid values are ``contains`` and ``starts_with``.
+
+muc_mention_autocomplete_show_avatar
+------------------------------------
+
+* Default:  ``true``
+
+Show avatars of MUC participants when using auto-complete.
 
 message_archiving
 -----------------
@@ -913,7 +1146,7 @@ message_archiving_timeout
 The amount of time (in milliseconds) to wait when requesting archived messages
 from the XMPP server.
 
-Used in conjunction with `message_archiving` and in context of `XEP-0313: Message Archive Management <https://xmpp.org/extensions/xep-0313.html>`_.
+Used in conjunction with ``message_archiving`` and in context of `XEP-0313: Message Archive Management <https://xmpp.org/extensions/xep-0313.html>`_.
 
 message_carbons
 ---------------
@@ -925,19 +1158,47 @@ Support for `XEP-0280: Message Carbons <https://xmpp.org/extensions/xep-0280.htm
 In order to keep all IM clients for a user engaged in a conversation,
 outbound messages are carbon-copied to all interested resources.
 
-This is especially important in webchat, like Converse, where each browser
+This is especially important with Converse, where each browser
 tab serves as a separate IM client.
 
-Both message_carbons and `forward_messages`_ try to solve the same problem
-(showing sent messages in all connected chat clients aka resources), but go about it
-in two different ways.
+XEP-0280 requires server support, so make sure that message carbons are enabled
+on your server.
 
-Message carbons is the XEP (Jabber protocol extension) specifically drafted to
-solve this problem, while `forward_messages`_ uses
-`stanza forwarding <http://www.xmpp.org/extensions/xep-0297.html>`_
 
-muc_disable_moderator_commands
-------------------------------
+message_limit
+-------------
+
+* Default:  ``0``
+
+Determines the allowed amount of characters in a chat message. A value of zero means there is no limit.
+Note, this limitation only applies to the Converse UX code running in the browser
+and it's trivial for an attacker to bypass this restriction.
+
+You should therefore also configure your XMPP server to limit message sizes.
+
+modtools_disable_assign
+-----------------------
+
+* Default: ``false``
+* Possible Values: ``true``, ``false``, ``['owner', 'admin', 'member', 'outcast', 'none', 'moderator', 'participant', 'visitor']``
+
+This setting allows you to disable (either completely, or fine-grained) which affiliations and or roles
+may be assigned in the moderator tools modal.
+
+
+modtools_disable_query
+----------------------
+
+* Default: ``[]``
+* Possible Values: ``['owner', 'admin', 'member', 'outcast', 'none', 'moderator', 'participant', 'visitor']``
+
+This setting allows you to disable which affiliations or roles may be queried in the moderator tools modal.
+If all roles or all affiliations are disabled, then the relevant tab won't be
+showed at all.
+
+
+muc_disable_slash_commands
+--------------------------
 
 * Default: ``false``
 
@@ -951,7 +1212,7 @@ The following example will disable 'mute' and 'voice' command:
 
 .. code-block:: javascript
 
-    muc_disable_moderator_commands: ['mute', 'voice'],
+    muc_disable_slash_commands: ['mute', 'voice'],
 
 muc_domain
 ----------
@@ -966,8 +1227,31 @@ and don't have to add the whole address (i.e. including the domain part).
 Users can however still enter the domain and they can still open MUCs with
 other domains.
 
-If you want to restrict MUCs to only this domain, then set `locked_domain`_ to
+If you want to restrict MUCs to only this domain, then set `locked_muc_domain`_ to
 ``true``.
+
+
+muc_fetch_members
+-----------------
+
+* Default:  ``true``
+
+* Possible values: Array containing any of the following: ``['member', 'admin', 'owner']``
+
+Determines whether Converse.js will fetch the member lists for a MUC
+(multi-user chat) when the user first enters it.
+
+Here's the relevant part from the MUC XEP: https://xmpp.org/extensions/xep-0045.html#getmemberlist
+
+The MUC service won't necessarily allow any user to fetch member lists,
+but can usually be configured to do so.
+
+The member lists consists of three lists of users who have the affiliations
+``member``, ``admin`` and ``owner`` respectively.
+
+By fetching member lists, Converse.js will always show these users as
+participants of the MUC, giving them a permanent "presence" in the MUC.
+
 
 muc_history_max_stanzas
 -----------------------
@@ -1014,6 +1298,87 @@ automatically be "john". If now john@differentdomain.com tries to join the
 room, his nickname will be "john-2", and if john@somethingelse.com joins, then
 his nickname will be "john-3", and so forth.
 
+muc_send_probes
+---------------
+
+* Default: ``false``
+
+If set to ``true``,  then whenever Converse receives a MUC message with an author for which we don't have
+any information (i.e. because that user is currently not in the MUC), then Converse will send out a ``<presence>``
+stanza of type ``probe`` in order to request the authors presence data.
+
+Prosody has some experimental support in it's contrib branch (hopefully soon to
+be merged to trunk).
+
+The point of sending out presence probes is in order to receive
+presence-related metadata, such as `XEP-0317 Hats <https://xmpp.org/extensions/xep-0317.html>`_.
+
+.. note::
+  Although this behavior is described in the `presence business rules of XEP-0045, section 17.3 point 4 <https://xmpp.org/extensions/xep-0045.html#bizrules-presence>`_,
+  few XMPP servers support this.
+
+.. note::
+  If member lists are fetched via muc_fetch_members, then the occupants created
+  based on those member lists won't be probed again later (given that the
+  occupants are already created). Certain metadata like XEP-0317 hats are not
+  included in the member lists, which means that this metadata will be missing for
+  those occupants.
+
+
+muc_respect_autojoin
+--------------------
+
+* Default; ``true``
+
+Determines whether Converse will respect the autojoin-attribute of bookmarks. Per default
+all MUCs with set autojoin flag in their respective bookmarks will be joined on
+startup of Converse. When set to ``false`` no MUCs are automatically joined based on
+their bookmarks.
+
+muc_roomid_policy
+-----------------
+
+* Default: ``null``
+
+This option defines the regular expression that a room id must satisfy to allow the
+room creation. Server administrators may want to impose restrictions on the minimum
+and maximum length and the allowed character set allowed for room ids. Otherwise
+users might create rooms which are difficult to handle.
+
+However, restricting that on the server only leads to bad UX as users might learn of
+the servers policy only after they have tried to create a room. Furthermore error
+messages from XMPP-servers might not be self-explanatory.
+
+Therefore this option allows converse to already check the policy and disallow the
+user from even trying to entering/creating such a room.
+
+As this only makes sense on your own server, the check is applied only if the domain
+part equals `muc_domain`_. If `muc_domain`_ is unset, then this check is disabled
+completely.
+
+Example:
+
+.. code-block:: javascript
+
+    muc_roomid_policy: /^[a-z0-9._-]{5,40}$/,
+
+See also: `muc_roomid_policy_hint`_
+
+muc_roomid_policy_hint
+----------------------
+
+* Default: ``null``
+
+This option can be used in conjuction with `muc_roomid_policy`_ in order to give
+a written explanation of the imposed room id policy. You can use the html-tags
+``<br>``, ``<b>``, and ``<em>`` to allow some basic styling.
+
+Example:
+
+.. code-block:: javascript
+
+    muc_roomid_policy_hint: '<br><b>Policy for groupchat id:</b><br>- between 5 and 40 characters,<br>- lowercase from a to z (no special characters) or<br>- digits or<br>- dots (.) or<br>- underlines (_) or<br>- hyphens (-),<br>- no spaces<br>',
+
 muc_show_join_leave
 -------------------
 
@@ -1021,6 +1386,18 @@ muc_show_join_leave
 
 Determines whether Converse will show info messages inside a chatroom
 whenever a user joins or leaves it.
+
+muc_show_logs_before_join
+-------------------------
+
+* Default: ``false``
+
+If set to ``true``, when opening a MUC for the first time (or if you don't have
+a nickname configured for it), you'll see the message history (if the
+server supports [XEP-0313 Message Archive Management](https://xmpp.org/extensions/xep-0313.html))
+and the nickname form at the bottom.
+
+.. _`nickname`:
 
 nickname
 --------
@@ -1030,6 +1407,10 @@ nickname
 This setting allows you to specify the nickname for the current user.
 The nickname will be included in presence requests to other users and will also
 be used as the default nickname when entering MUC chatrooms.
+
+This value will have first preference ahead of other nickname sources, such as
+the VCard ``nickname`` value.
+
 
 notify_all_room_messages
 ------------------------
@@ -1059,6 +1440,16 @@ notification_icon
 
 This option specifies which icon is shown in HTML5 notifications, as provided
 by the ``src/converse-notification.js`` plugin.
+
+notify_nicknames_without_references
+-----------------------------------
+
+* Default: ``false``
+
+Enables notifications for nicknames in messages that don't have associated
+XEP-0372 references linking them to the JID of the person being mentioned.
+
+In Converse, these would be nicknames that weren't mentioned via the ``@`` sign.
 
 oauth_providers
 ---------------
@@ -1093,10 +1484,17 @@ with.
         });
 
 
+omemo_default
+-------------
+
+* Default:  ``false``
+
+Use OMEMO encryption by default when the chat supports it.
+
 ping_interval
 -------------
 
-* Default:  ``180``
+* Default:  ``60``
 
 Make ping to server in order to keep connection with server killing sessions after idle timeout.
 The ping are sent only if no messages are sent in the last ``ping_interval`` seconds
@@ -1117,8 +1515,7 @@ nickname is mentioned in a chatroom.
 Inside the ``./sounds`` directory of the Converse repo you'll see MP3 and Ogg
 formatted sound files. We need both, because neither format is supported by all browsers.
 
-You can set the URL where the sound files are hosted with the `sounds_path`_
-option.
+You can set the URL where the sound files are hosted with the `sounds_path`_ option.
 
 Requires the `src/converse-notification.js` plugin.
 
@@ -1132,7 +1529,7 @@ prebind_url
 
 See also: :ref:`session-support`
 
-This setting should be used in conjunction with ``authentication`` set to `prebind` and :ref:`keepalive` set to ``true``.
+This setting should be used in conjunction with `authentication`_ set to `prebind`.
 
 It allows you to specify a URL which Converse will call when it needs to get
 the RID and SID (Request ID and Session ID) tokens of a BOSH connection, which
@@ -1174,6 +1571,51 @@ providers_link
 
 The hyperlink on the registration form which points to a directory of public
 XMPP servers.
+
+.. _`assets_path`:
+
+assets_path
+-----------
+
+* Default: ``'/dist/'`` or the `publicPath <https://webpack.js.org/guides/public-path/>`_ value as configured in the relevant Webpack configuration.
+
+Since version 5.0.0, Converse serves a smaller bundle by extracting various
+resources (for example emojis and translations) into separate files (aka
+"chunks") which are loaded asynchronously on demand.
+
+The URL path at which these resources are loaded is normally set by the ``publicPath``
+setting of Webpack but this means that it's hardcoded to a particular value at
+compile time.
+
+This configuration seting allows this value to be set at runtime as well.
+
+
+persistent_store
+----------------
+
+* Default: ``localStorage``
+* Valid options: ``localStorage``, ``IndexedDB``, ``sessionStorage``, ``BrowserExtLocal``, ``BrowserExtSync``
+
+Determines which store is used for storing persistent data.
+
+From version 6.0.0 onwards, Converse supports storing data in
+`IndexedDB <https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API/Basic_Concepts_Behind_IndexedDB>`_.
+
+IndexedDB is not subjected to the same space constraints as localStorage and is
+also a requirement for progressive web apps which don't need persistent a
+internet connectivity to be functional.
+
+From version 7.0.0 onwards, Converse supports storing data in
+`Browser Extension storage <https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/storage#Example_extensions>`_.
+
+When Converse is running inside a web browser extension, it can now take advantage of storage optimized to meet the specific storage needs of extensions.
+
+BrowserExtSync represents the sync storage area.
+Items in sync storage are synced by the browser and are available across all instances of that browser that the user is logged into, across different devices.
+
+BrowserExtLocal represents the local storage area.
+Items in local storage are local to the machine the extension was installed on
+
 
 push_app_servers
 ----------------
@@ -1246,6 +1688,7 @@ For example:
 
     initConverse(shadowRoot) {
         window.addEventListener("converse-loaded", function(event) {
+            const { converse } = event.detail;
             converse.initialize({
                 root: shadowRoot,
                 // Other settings go here...
@@ -1267,8 +1710,29 @@ If set to ``true``, Converse will show any roster groups you might have configur
     Converse can only show users and groups that were previously configured
     elsewhere.
 
-show_chatstate_notifications
-----------------------------
+
+send_chat_state_notifications
+-----------------------------
+
+* Default: ``true``
+
+Determines whether chat state notifications (see `XEP-0085 <https://xmpp.org/extensions/xep-0085.html>`_) should be sent out or not.
+
+Can also be set to an Array in order to allow only certain types of chat state notifications.
+
+For example:
+
+.. code-block:: javascript
+
+        converse.initialize({
+            'send_chat_state_notifications':  ['composing']
+        });
+
+Valid values are ``'active', 'composing', 'gone' 'inactive', 'paused'``
+
+
+show_chat_state_notifications
+-----------------------------
 
 * Default:  ``false``
 
@@ -1285,7 +1749,7 @@ Specifies whether the info icon is shown on the controlbox which when clicked op
 show_controlbox_by_default
 --------------------------
 
-* Default:  ``false`` (``true`` when the ``view_mode`` is set to ``fullscreen``)
+* Default:  ``false`` (``true`` when the `view_mode`_ is set to ``fullscreen``)
 
 The "controlbox" refers to the special chatbox containing your contacts roster,
 status widget, chatrooms and other controls.
@@ -1313,58 +1777,99 @@ If set to ``true``, notifications will be shown in the following cases:
 
 * the browser is not visible nor focused and a private message is received.
 * the browser is not visible nor focused and a groupchat message is received which mentions you.
-* `auto_subscribe` is set to `false` and a new contact request is received.
+* ``auto_subscribe`` is set to ``false`` and a new contact request is received.
 
 If set to ``all``, notifications will be shown even if the above conditions are
 not fulfilled.
 
 Requires the `src/converse-notification.js` plugin.
 
-use_system_emojis
------------------
-* Default: ``true``
 
-Determines whether emojis should be rendered by the user's system.
-
-Not all operating systems support (all) emojis. So alternatively you can let
-Converse render the emojis with [Twemoji](https://twemoji.twitter.com/).
-
-See also `emoji_image_path`_.
-
-send_chat_state_notifications
------------------------------
+show_message_avatar
+-------------------
 
 * Default: ``true``
 
-Determines whether chat state notifications (see `XEP-0085 <https://xmpp.org/extensions/xep-0085.html>`_)
-should be sent out or not.
+Whether chat messages should also render the author's avatar.
+
 
 show_images_inline
 ------------------
 
 * Default:  ``true``
 
-If set to false, images won't be rendered in chats, instead only their links will be shown.
+If set to ``false``, images won't be rendered in chats, instead only their links will be shown.
 
-show_only_online_users
-----------------------
+It also accepts an array strings of whitelisted domain names to only render images that belong to those domains.
 
-* Default:  ``false``
+E.g. ``['imgur.com', 'imgbb.com']``
 
-If set to ``true``, only online users will be shown in the contacts roster.
-Users with any other status (e.g. away, busy etc.) will not be shown.
+show_retraction_warning
+-----------------------
+
+* Default: ``true``
+
+From `XEP-0424: Message Retraction <https://xmpp.org/extensions/xep-0424.html>`_:
+
+::
+  Due to the federated and extensible nature of XMPP it's not possible to remove a message with
+  full certainty and a retraction can only be considered an unenforceable request for such removal.
+  Clients which don't support message retraction are not obligated to enforce the request and
+  people could have seen or copied the message contents already.
+
+By default Converse shows a warning to users when they retract a message, to
+inform them that they don't have a guarantee that the message will be removed
+everywhere.
+
+This warning isn't applicable to all deployments of Converse and can therefore
+be turned off by setting this config variable to ``false``.
 
 show_send_button
 ----------------
 
+* Default: ``true``
+
+Adds a button to the chat which can be clicked or tapped in order to send the
+message.
+
+
+show_tab_notifications
+----------------------
+
+* Default: ``true``
+
+Determines whether an unread messages counter is shown in the tab.
+
+
+singleton
+---------
+
 * Default:  ``false``
 
-If set to ``true``, a button will be visible which can be clicked to send a message.
+If set to ``true``, then only one chat (one-on-one or groupchat) will be allowed.
+
+The chat must be specified with the `auto_join_rooms`_ or `auto_join_private_chats`_ options.
+
+This setting is useful together with `view_mode`_ set to ``embedded``, when you
+want to embed a chat into the page.
+
+Alternatively you could use it with `view_mode`_ set to ``overlayed`` to create
+a single helpdesk-type chat.
+
+
+smacks_max_unacked_stanzas
+--------------------------
+
+* Default: ``5``
+
+This setting relates to `XEP-0198 <https://xmpp.org/extensions/xep-0198.html>`_
+and determines the number of stanzas to be sent before Converse will ask the
+server for acknowledgement of those stanzas.
 
 sounds_path
 -----------
 
-* Default: ``sounds/``
+* Default: ``${assets_path}/sounds/``
 
 This option only makes sense in conjunction with the `play_sounds`_ option and
 specifies the URL of the sound files to be played (exluding the file names
@@ -1419,11 +1924,10 @@ synchronize_availability
 ------------------------
 
 * Default: ``true``
-
-Valid options: ``true``, ``false``, ``a resource name``.
+* Valid options: ``true``, ``false``, ``a resource name``.
 
 This option lets you synchronize your chat status (`online`, `busy`, `away`) with other chat clients. In other words,
-if you change your status to `busy` in a different chat client, your status will change to `busy` in Converse as well.
+if you change your status to ``busy`` in a different chat client, your status will change to ``busy`` in Converse as well.
 
 If set to ``true``, Converse will synchronize with all other clients you are logged in with.
 
@@ -1435,47 +1939,10 @@ theme
 -----
 
 * Default: ``default``
-
-Valid options: ``default``, ``concord``
+* Valid options: ``default``, ``concord``
 
 Let's you set a color theme for Converse.
 
-
-trusted
--------
-
-* Default: ``true``
-
-This setting determines whether the default value of the "This is a trusted device"
-checkbox in the login form.
-
-When the current device is not trusted, then the cache will be cleared when
-the user logs out.
-
-Additionally, it determines the type of `browser storage <https://developer.mozilla.org/en-US/docs/Web/Guide/API/DOM/Storage>`_
-(``localStorage`` or ``sessionStorage``) used by Converse to cache user data.
-
-If ``trusted`` is set to ``false``, then ``sessionStorage`` is used instead of
-``localStorage``.
-
-The main difference between the two is that ``sessionStorage`` only persists while
-the current tab or window containing a Converse instance is open. As soon as
-it's closed, the data is cleared (as long as there aren't any other tabs with
-the same domain open).
-
-Data in ``localStorage`` on the other hand is kept indefinitely.
-
-The data that is cached includes your sent and received messages, which chats you had
-open, what features the XMPP server supports and what your online status was.
-
-Clearing the cache makes Converse much slower when the user logs
-in again, because all data needs to be fetch anew.
-
-If ``trusted`` is set to ``on`` or ``off`` the "This is a trusted device"
-checkbox in the login form will not appear at all and cannot be changed by the user.
-``on`` means to trust the device as stated above and use ``localStorage``. ``off``
-means to not trust the device (cache is cleared when the user logs out) and to use
-``sessionStorage``.
 
 time_format
 -----------
@@ -1484,17 +1951,23 @@ time_format
 
 Examples: ``HH:mm``, ``hh:mm``, ``hh:mm a``.
 
-This option makes the time format for the time shown, for each message, configurable. Converse uses `moment.js <https://momentjs.com/>`_
-for showing time. This option allows the configuration of the format in which `moment` will display the time for the messages. For detailed
-description of time-format options available for `moment` you can check this `link <https://momentjs.com/docs/#/parsing/string-format/>`_.
+This option makes the time format for the time shown, for each message, configurable. Converse uses `DayJS <https://github.com/iamkun/dayjs>`_
+for showing time. This option allows the configuration of the format in which ``DayJS`` will display the time for the messages. For detailed
+description of time-format options available for ``DayJS`` you can check the
+`default formatting options <https://github.com/iamkun/dayjs/blob/dev/docs/en/API-reference.md#displaying>`_ and the
+`advanced options <https://github.com/iamkun/dayjs/blob/master/docs/en/Plugin.md#advancedformat>`_.
 
-use_otr_by_default
-------------------
+use_system_emojis
+-----------------
+* Default: ``true``
 
-* Default:  ``false``
+Determines whether emojis should be rendered by the user's system.
 
-If set to ``true``, Converse will automatically try to initiate an OTR (off-the-record)
-encrypted chat session every time you open a chatbox.
+Not all operating systems support (all) emojis. So alternatively you can let
+Converse render the emojis with `Twemoji <https://twemoji.twitter.com/>`_.
+
+See also `emoji_image_path`_.
+
 
 visible_toolbar_buttons
 -----------------------
@@ -1532,10 +2005,15 @@ Allows you to show or hide buttons on the chatboxes' toolbars.
 
 .. _`websocket-url`:
 
+
 websocket_url
 -------------
 
 * Default: ``undefined``
+
+Example: ``ws://xmpp.example.com:5280/ws/``
+
+Example with reverse-proxy and TLS: ``wss://xmpp.example.com/ws/``
 
 This option is used to specify a
 `websocket <https://developer.mozilla.org/en/docs/WebSockets>`_ URI to which
@@ -1549,13 +2027,6 @@ techniques for bidirectional HTTP (such as `BOSH <https://en.wikipedia.org/wiki/
 Please refer to your XMPP server's documentation on how to enable websocket
 support.
 
-.. note::
-    Please note that not older browsers do not support websockets. For older
-    browsers you'll want to specify a BOSH URL. See the :ref:`bosh-service-url`
-    configuration setting).
-
-.. note::
-    Converse does not yet support "keepalive" with websockets.
 
 .. _`view_mode`:
 
@@ -1652,7 +2123,6 @@ These are::
     converse-muc
     converse-muc-embedded
     converse-notification
-    converse-otr
     converse-ping
     converse-profile
     converse-register

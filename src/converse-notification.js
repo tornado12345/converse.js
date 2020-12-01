@@ -1,15 +1,29 @@
-// Converse.js (A browser based XMPP chat client)
-// https://conversejs.org
-//
-// Copyright (c) 2013-2019, JC Brand <jc@opkode.com>
-// Licensed under the Mozilla Public License (MPLv2)
-//
-/*global define */
+/**
+ * @module converse-notification
+ * @copyright 2020, the Converse.js contributors
+ * @license Mozilla Public License (MPLv2)
+ */
+import Favico from 'favico.js-slevomat';
+import log from "@converse/headless/log";
+import { __ } from './i18n';
+import { _converse, api, converse } from "@converse/headless/converse-core";
 
-import converse from "@converse/headless/converse-core";
+const { Strophe } = converse.env;
+const u = converse.env.utils;
 
-const { Strophe, _, sizzle } = converse.env,
-      u = converse.env.utils;
+const supports_html5_notification = "Notification" in window;
+
+converse.env.Favico = Favico;
+let favicon;
+
+function updateUnreadFavicon () {
+    if (api.settings.get('show_tab_notifications')) {
+        favicon = favicon ?? new converse.env.Favico({type: 'circle', animation: 'pop'});
+        const chats = _converse.chatboxes.models;
+        const num_unread = chats.reduce((acc, chat) => (acc + (chat.get('num_unread') || 0)), 0);
+        favicon.badge(num_unread);
+    }
+}
 
 
 converse.plugins.add('converse-notification', {
@@ -20,103 +34,101 @@ converse.plugins.add('converse-notification', {
         /* The initialize function gets called as soon as the plugin is
          * loaded by converse.js's plugin machinery.
          */
-        const { _converse } = this;
-        const { __ } = _converse;
 
-        _converse.supports_html5_notification = "Notification" in window;
-
-        _converse.api.settings.update({
-            notify_all_room_messages: false,
-            show_desktop_notifications: true,
-            show_chatstate_notifications: false,
-            chatstate_notification_blacklist: [],
+        api.settings.extend({
             // ^ a list of JIDs to ignore concerning chat state notifications
-            play_sounds: true,
-            sounds_path: 'sounds/',
+            chatstate_notification_blacklist: [],
+            notification_delay: 5000,
             notification_icon: 'logo/conversejs-filled.svg',
-            notification_delay: 5000
+            notify_all_room_messages: false,
+            notify_nicknames_without_references: false,
+            play_sounds: true,
+            show_chat_state_notifications: false,
+            show_desktop_notifications: true,
+            show_tab_notifications: true,
+            sounds_path: api.settings.get("assets_path")+'/sounds/',
         });
 
-        _converse.isOnlyChatStateNotification = (msg) =>
-            // See XEP-0085 Chat State Notification
-            _.isNull(msg.querySelector('body')) && (
-                    _.isNull(msg.querySelector(_converse.ACTIVE)) ||
-                    _.isNull(msg.querySelector(_converse.COMPOSING)) ||
-                    _.isNull(msg.querySelector(_converse.INACTIVE)) ||
-                    _.isNull(msg.querySelector(_converse.PAUSED)) ||
-                    _.isNull(msg.querySelector(_converse.GONE))
-                )
-        ;
-
-        _converse.shouldNotifyOfGroupMessage = function (message) {
-            /* Is this a group message worthy of notification?
-             */
-            let notify_all = _converse.notify_all_room_messages;
-            const jid = message.getAttribute('from'),
-                resource = Strophe.getResourceFromJid(jid),
-                room_jid = Strophe.getBareJidFromJid(jid),
-                sender = resource && Strophe.unescapeNode(resource) || '';
-            if (sender === '' || message.querySelectorAll('delay').length > 0) {
+        /**
+         * Is this a group message for which we should notify the user?
+         * @private
+         * @method _converse#shouldNotifyOfGroupMessage
+         * @param { MUCMessageAttributes } attrs
+         */
+        _converse.shouldNotifyOfGroupMessage = function (attrs) {
+            if (!attrs?.body) {
                 return false;
             }
+            const jid = attrs.from;
+            const room_jid = attrs.from_muc;
+            const notify_all = api.settings.get('notify_all_room_messages');
             const room = _converse.chatboxes.get(room_jid);
-            const body = message.querySelector('body');
-            if (_.isNull(body)) {
-                return false;
+            const resource = Strophe.getResourceFromJid(jid);
+            const sender = resource && Strophe.unescapeNode(resource) || '';
+            let is_mentioned = false;
+            const nick = room.get('nick');
+
+            if (api.settings.get('notify_nicknames_without_references')) {
+                is_mentioned = (new RegExp(`\\b${nick}\\b`)).test(attrs.body);
             }
-            const mentioned = (new RegExp(`\\b${room.get('nick')}\\b`)).test(body.textContent);
-            notify_all = notify_all === true ||
-                (_.isArray(notify_all) && _.includes(notify_all, room_jid));
-            if (sender === room.get('nick') || (!notify_all && !mentioned)) {
-                return false;
-            }
-            return true;
+
+            const is_referenced = attrs.references.map(r => r.value).includes(nick);
+            const is_not_mine = sender !== nick;
+            const should_notify_user = notify_all === true
+                || (Array.isArray(notify_all) && notify_all.includes(room_jid))
+                || is_referenced
+                || is_mentioned;
+            return is_not_mine && !!should_notify_user;
         };
 
-        _converse.isMessageToHiddenChat = function (message) {
-            if (_converse.isUniView()) {
-                const jid = Strophe.getBareJidFromJid(message.getAttribute('from')),
-                      view = _converse.chatboxviews.get(jid);
+        /**
+         * Given parsed attributes for a message stanza, get the related
+         * chatbox and check whether it's hidden.
+         * @private
+         * @method _converse#isMessageToHiddenChat
+         * @param { MUCMessageAttributes } attrs
+         */
+        _converse.isMessageToHiddenChat = function (attrs) {
+            return _converse.chatboxes.get(attrs.from)?.isHidden() ?? false;
+        };
 
-                if (!_.isNil(view)) {
-                    return view.model.get('hidden') || _converse.windowState === 'hidden' || !u.isVisible(view.el);
-                }
-                return true;
-            }
-            return _converse.windowState === 'hidden';
-        }
-
-        _converse.shouldNotifyOfMessage = function (message) {
-            const forwarded = message.querySelector('forwarded');
-            if (!_.isNull(forwarded)) {
+        /**
+         * @private
+         * @method _converse#shouldNotifyOfMessage
+         * @param { MessageData|MUCMessageData } data
+         */
+        _converse.shouldNotifyOfMessage = function (data) {
+            const { attrs, stanza } = data;
+            if (!attrs || stanza.querySelector('forwarded') !== null) {
                 return false;
-            } else if (message.getAttribute('type') === 'groupchat') {
-                return _converse.shouldNotifyOfGroupMessage(message);
-            } else if (u.isHeadlineMessage(_converse, message)) {
+            }
+            if (attrs['type'] === 'groupchat') {
+                return _converse.shouldNotifyOfGroupMessage(attrs);
+            } else if (attrs.is_headline) {
                 // We want to show notifications for headline messages.
-                return _converse.isMessageToHiddenChat(message);
+                return _converse.isMessageToHiddenChat(attrs);
             }
-            const is_me = Strophe.getBareJidFromJid(
-                    message.getAttribute('from')) === _converse.bare_jid;
-            return !_converse.isOnlyChatStateNotification(message) &&
+            const is_me = Strophe.getBareJidFromJid(attrs.from) === _converse.bare_jid;
+            return !u.isOnlyChatStateNotification(stanza) &&
+                !u.isOnlyMessageDeliveryReceipt(stanza) &&
                 !is_me &&
-                (_converse.show_desktop_notifications === 'all' || _converse.isMessageToHiddenChat(message));
+                (api.settings.get('show_desktop_notifications') === 'all' || _converse.isMessageToHiddenChat(attrs));
         };
 
 
+        /**
+         * Plays a notification sound
+         * @private
+         * @method _converse#playSoundNotification
+         */
         _converse.playSoundNotification = function () {
-            /* Plays a sound to notify that a new message was recieved.
-             */
-            // XXX Eventually this can be refactored to use Notification's sound
-            // feature, but no browser currently supports it.
-            // https://developer.mozilla.org/en-US/docs/Web/API/notification/sound
-            if (_converse.play_sounds && !_.isUndefined(window.Audio)) {
-                const audioOgg = new Audio(_converse.sounds_path+"msg_received.ogg");
+            if (api.settings.get('play_sounds') && window.Audio !== undefined) {
+                const audioOgg = new Audio(api.settings.get('sounds_path')+"msg_received.ogg");
                 const canPlayOgg = audioOgg.canPlayType('audio/ogg');
                 if (canPlayOgg === 'probably') {
                     return audioOgg.play();
                 }
-                const audioMp3 = new Audio(_converse.sounds_path+"msg_received.mp3");
+                const audioMp3 = new Audio(api.settings.get('sounds_path')+"msg_received.mp3");
                 const canPlayMp3 = audioMp3.canPlayType('audio/mp3');
                 if (canPlayMp3 === 'probably') {
                     audioMp3.play();
@@ -129,74 +141,84 @@ converse.plugins.add('converse-notification', {
         };
 
         _converse.areDesktopNotificationsEnabled = function () {
-            return _converse.supports_html5_notification &&
-                _converse.show_desktop_notifications &&
+            return supports_html5_notification &&
+                api.settings.get('show_desktop_notifications') &&
                 Notification.permission === "granted";
         };
 
-        _converse.showMessageNotification = function (message) {
-            /* Shows an HTML5 Notification to indicate that a new chat
-             * message was received.
-             */
+        /**
+         * Shows an HTML5 Notification with the passed in message
+         * @private
+         * @method _converse#showMessageNotification
+         * @param { MessageData|MUCMessageData } data
+         */
+        _converse.showMessageNotification = function (data) {
+            const { attrs } = data;
+            if (attrs.is_error) {
+                return;
+            }
+
             if (!_converse.areDesktopNotificationsEnabled()) {
                 return;
             }
             let title, roster_item;
-            const full_from_jid = message.getAttribute('from'),
+            const full_from_jid = attrs.from,
                   from_jid = Strophe.getBareJidFromJid(full_from_jid);
-            if (message.getAttribute('type') === 'headline') {
-                if (!_.includes(from_jid, '@') || _converse.allow_non_roster_messaging) {
+            if (attrs.type === 'headline') {
+                if (!from_jid.includes('@') || api.settings.get("allow_non_roster_messaging")) {
                     title = __("Notification from %1$s", from_jid);
                 } else {
                     return;
                 }
-            } else if (!_.includes(from_jid, '@')) {
+            } else if (!from_jid.includes('@')) {
                 // workaround for Prosody which doesn't give type "headline"
                 title = __("Notification from %1$s", from_jid);
-            } else if (message.getAttribute('type') === 'groupchat') {
+            } else if (attrs.type === 'groupchat') {
                 title = __("%1$s says", Strophe.getResourceFromJid(full_from_jid));
             } else {
-                if (_.isUndefined(_converse.roster)) {
-                    _converse.log(
-                        "Could not send notification, because roster is undefined",
-                        Strophe.LogLevel.ERROR);
+                if (_converse.roster === undefined) {
+                    log.error("Could not send notification, because roster is undefined");
                     return;
                 }
                 roster_item = _converse.roster.get(from_jid);
-                if (!_.isUndefined(roster_item)) {
+                if (roster_item !== undefined) {
                     title = __("%1$s says", roster_item.getDisplayName());
                 } else {
-                    if (_converse.allow_non_roster_messaging) {
+                    if (api.settings.get("allow_non_roster_messaging")) {
                         title = __("%1$s says", from_jid);
                     } else {
                         return;
                     }
                 }
             }
-            // TODO: we should suppress notifications if we cannot decrypt
-            // the message...
-            const body = sizzle(`encrypted[xmlns="${Strophe.NS.OMEMO}"]`, message).length ?
-                         __('OMEMO Message received') :
-                         _.get(message.querySelector('body'), 'textContent');
+
+            const body = attrs.is_encrypted ? __('Encrypted message received') : attrs.body;
             if (!body) {
                 return;
             }
             const n = new Notification(title, {
                 'body': body,
                 'lang': _converse.locale,
-                'icon': _converse.notification_icon,
+                'icon': api.settings.get('notification_icon'),
                 'requireInteraction': !_converse.notification_delay
             });
-            if (_converse.notification_delay) {
-                setTimeout(n.close.bind(n), _converse.notification_delay);
+            if (api.settings.get('notification_delay')) {
+                setTimeout(n.close.bind(n), api.settings.get('notification_delay'));
             }
+            n.onclick = function (event) {
+                event.preventDefault();
+                window.focus();
+                const chat = _converse.chatboxes.get(from_jid);
+                chat.maybeShow(true);
+            }
+            n.onclick.bind(_converse);
         };
 
         _converse.showChatStateNotification = function (contact) {
             /* Creates an HTML5 Notification to inform of a change in a
              * contact's chat state.
              */
-            if (_.includes(_converse.chatstate_notification_blacklist, contact.jid)) {
+            if (_converse.chatstate_notification_blacklist.includes(contact.jid)) {
                 // Don't notify if the user is being ignored.
                 return;
             }
@@ -247,7 +269,7 @@ converse.plugins.add('converse-notification', {
              * Will show an HTML5 notification to indicate that the chat
              * status has changed.
              */
-            if (_converse.areDesktopNotificationsEnabled() && _converse.show_chatstate_notifications) {
+            if (_converse.areDesktopNotificationsEnabled() && api.settings.get('show_chat_state_notifications')) {
                 _converse.showChatStateNotification(contact);
             }
         };
@@ -256,13 +278,19 @@ converse.plugins.add('converse-notification', {
             /* Event handler for the on('message') event. Will call methods
              * to play sounds and show HTML5 notifications.
              */
-            const message = data.stanza;
-            if (!_converse.shouldNotifyOfMessage(message)) {
+            if (!_converse.shouldNotifyOfMessage(data)) {
                 return false;
             }
-            _converse.api.emit('messageNotification', message);
+            /**
+             * Triggered when a notification (sound or HTML5 notification) for a new
+             * message has will be made.
+             * @event _converse#messageNotification
+             * @type { MessageData|MUCMessageData}
+             * @example _converse.api.listen.on('messageNotification', stanza => { ... });
+             */
+            api.trigger('messageNotification', data);
             _converse.playSoundNotification();
-            _converse.showMessageNotification(message);
+            _converse.showMessageNotification(data);
         };
 
         _converse.handleContactRequestNotification = function (contact) {
@@ -278,23 +306,28 @@ converse.plugins.add('converse-notification', {
         };
 
         _converse.requestPermission = function () {
-            if (_converse.supports_html5_notification &&
-                ! _.includes(['denied', 'granted'], Notification.permission)) {
+            if (supports_html5_notification && !['denied', 'granted'].includes(Notification.permission)) {
                 // Ask user to enable HTML5 notifications
                 Notification.requestPermission();
             }
         };
 
-        _converse.on('pluginsInitialized', function () {
+        /************************ BEGIN Event Handlers ************************/
+
+        api.listen.on('clearSession', () => (favicon = null)); // Needed for tests
+
+        api.waitUntil('chatBoxesInitialized').then(
+            () => _converse.chatboxes.on('change:num_unread', updateUnreadFavicon));
+
+        api.listen.on('pluginsInitialized', function () {
             // We only register event handlers after all plugins are
             // registered, because other plugins might override some of our
             // handlers.
-            _converse.on('contactRequest',  _converse.handleContactRequestNotification);
-            _converse.on('contactPresenceChanged',  _converse.handleChatStateNotification);
-            _converse.on('message',  _converse.handleMessageNotification);
-            _converse.on('feedback', _converse.handleFeedback);
-            _converse.on('connected', _converse.requestPermission);
+            api.listen.on('contactRequest',  _converse.handleContactRequestNotification);
+            api.listen.on('contactPresenceChanged',  _converse.handleChatStateNotification);
+            api.listen.on('message',  _converse.handleMessageNotification);
+            api.listen.on('feedback', _converse.handleFeedback);
+            api.listen.on('connected', _converse.requestPermission);
         });
     }
 });
-

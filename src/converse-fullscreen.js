@@ -1,53 +1,23 @@
-// Converse.js (A browser based XMPP chat client)
-// https://conversejs.org
-//
-// Copyright (c) JC Brand <jc@opkode.com>
-// Licensed under the Mozilla Public License (MPLv2)
-//
-
+/**
+ * @module converse-fullscreen
+ * @license Mozilla Public License (MPLv2)
+ * @copyright 2020, the Converse.js contributors
+ */
 import "@converse/headless/converse-muc";
 import "converse-chatview";
 import "converse-controlbox";
 import "converse-singleton";
-import converse from "@converse/headless/converse-core";
-import tpl_brand_heading from "templates/inverse_brand_heading.html";
+import { api, converse } from "@converse/headless/converse-core";
 
-const { Strophe, _ } = converse.env;
 
 converse.plugins.add('converse-fullscreen', {
 
     enabled (_converse) {
-        return _.includes(['fullscreen', 'embedded'], _converse.view_mode);
-    },
-
-    overrides: {
-        // overrides mentioned here will be picked up by converse.js's
-        // plugin architecture they will replace existing methods on the
-        // relevant objects or classes.
-        //
-        // new functions which don't exist yet can also be added.
-
-        ControlBoxView: {
-            createBrandHeadingHTML() {
-                const { _converse } = this.__super__;
-                return tpl_brand_heading({
-                    'version_name': _converse.VERSION_NAME
-                });
-            },
-
-            insertBrandHeading () {
-                const { _converse } = this.__super__;
-                const el = _converse.root.getElementById('converse-login-panel');
-                el.parentNode.insertAdjacentHTML(
-                    'afterbegin',
-                    this.createBrandHeadingHTML()
-                );
-            }
-        }
+        return _converse.isUniView();
     },
 
     initialize () {
-        this._converse.api.settings.update({
+        api.settings.extend({
             chatview_avatar_height: 50,
             chatview_avatar_width: 50,
             hide_open_bookmarks: true,

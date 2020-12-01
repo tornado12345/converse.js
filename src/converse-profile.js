@@ -1,117 +1,101 @@
-// Converse.js (A browser based XMPP chat client)
-// https://conversejs.org
-//
-// Copyright (c) 2013-2017, Jan-Carel Brand <jc@opkode.com>
-// Licensed under the Mozilla Public License (MPLv2)
-//
-/*global define */
-
+/**
+ * @module converse-profile
+ * @copyright The Converse.js contributors
+ * @license Mozilla Public License (MPLv2)
+ */
+import "@converse/headless/converse-status";
 import "@converse/headless/converse-vcard";
 import "converse-modal";
-import _FormData from "formdata-polyfill";
+import UserSettingsModal from "modals/user-settings";
 import bootstrap from "bootstrap.native";
-import converse from "@converse/headless/converse-core";
-import tpl_chat_status_modal from "templates/chat_status_modal.html";
-import tpl_client_info_modal from "templates/client_info_modal.html";
-import tpl_profile_modal from "templates/profile_modal.html";
-import tpl_profile_view from "templates/profile_view.html";
-import tpl_status_option from "templates/status_option.html";
+import log from "@converse/headless/log";
+import sizzle from 'sizzle';
+import tpl_chat_status_modal from "templates/chat_status_modal";
+import tpl_profile from "templates/profile.js";
+import tpl_profile_modal from "templates/profile_modal";
+import { BootstrapModal } from "./converse-modal.js";
+import { __ } from './i18n';
+import { _converse, api, converse } from "@converse/headless/converse-core";
 
-
-const { Strophe, Backbone, Promise, utils, _, moment } = converse.env;
 const u = converse.env.utils;
 
 
 converse.plugins.add('converse-profile', {
 
-    dependencies: ["converse-modal", "converse-vcard", "converse-chatboxviews"],
+    dependencies: ["converse-status", "converse-modal", "converse-vcard", "converse-chatboxviews"],
 
     initialize () {
         /* The initialize function gets called as soon as the plugin is
          * loaded by converse.js's plugin machinery.
          */
-        const { _converse } = this,
-              { __ } = _converse;
 
-        _converse.api.settings.update({
+        api.settings.extend({
+            'allow_adhoc_commands': true,
             'show_client_info': true
         });
 
 
-        _converse.ProfileModal = _converse.BootstrapModal.extend({
+        _converse.ProfileModal = BootstrapModal.extend({
+            id: "user-profile-modal",
             events: {
-                'change input[type="file"': "updateFilePreview",
-                'click .change-avatar': "openFileSelection",
                 'submit .profile-form': 'onFormSubmitted'
             },
 
             initialize () {
-                this.model.on('change', this.render, this);
-                _converse.BootstrapModal.prototype.initialize.apply(this, arguments);
-                _converse.emit('profileModalInitialized', this.model);
+                this.listenTo(this.model, 'change', this.render);
+                BootstrapModal.prototype.initialize.apply(this, arguments);
+                /**
+                 * Triggered when the _converse.ProfileModal has been created and initialized.
+                 * @event _converse#profileModalInitialized
+                 * @type { _converse.XMPPStatus }
+                 * @example _converse.api.listen.on('profileModalInitialized', status => { ... });
+                 */
+                api.trigger('profileModalInitialized', this.model);
             },
 
             toHTML () {
-                return tpl_profile_modal(_.extend(
+                return tpl_profile_modal(Object.assign(
                     this.model.toJSON(),
-                    this.model.vcard.toJSON(), {
-                    '_': _,
-                    '__': __,
-                    '_converse': _converse,
-                    'alt_avatar': __('Your avatar image'),
-                    'heading_profile': __('Your Profile'),
-                    'label_close': __('Close'),
-                    'label_email': __('Email'),
-                    'label_fullname': __('Full Name'),
-                    'label_jid': __('XMPP Address (JID)'),
-                    'label_nickname': __('Nickname'),
-                    'label_role': __('Role'),
-                    'label_role_help': __('Use commas to separate multiple roles. Your roles are shown next to your name on your chat messages.'),
-                    'label_url': __('URL'),
-                    'utils': u,
-                    'view': this
-                }));
+                    this.model.vcard.toJSON(),
+                    this.getAvatarData(),
+                    { 'view': this }
+                ));
+            },
+
+            getAvatarData () {
+                const image_type = this.model.vcard.get('image_type');
+                const image_data = this.model.vcard.get('image');
+                const image = "data:" + image_type + ";base64," + image_data;
+                return {
+                    'height': 128,
+                    'width': 128,
+                    image,
+                };
             },
 
             afterRender () {
-                this.tabs = _.map(this.el.querySelectorAll('.nav-item'), (tab) => new bootstrap.Tab(tab));
+                this.tabs = sizzle('.nav-item .nav-link', this.el).map(e => new bootstrap.Tab(e));
             },
 
-            openFileSelection (ev) {
-                ev.preventDefault();
-                this.el.querySelector('input[type="file"]').click();
-            },
-
-            updateFilePreview (ev) {
-                const file = ev.target.files[0],
-                      reader = new FileReader();
-                reader.onloadend = () => {
-                    this.el.querySelector('.avatar').setAttribute('src', reader.result);
-                };
-                reader.readAsDataURL(file);
-            },
-
-            setVCard (data) {
-                _converse.api.vcard.set(_converse.bare_jid, data)
-                .then(() => _converse.api.vcard.update(this.model.vcard, true))
-                .catch((err) => {
-                    _converse.log(err, Strophe.LogLevel.FATAL);
-                    _converse.api.alert.show(
-                        Strophe.LogLevel.ERROR,
-                        __('Error'),
-                        [__("Sorry, an error happened while trying to save your profile data."),
-                        __("You can check your browser's developer console for any error output.")]
-                    )
-                });
+            async setVCard (data) {
+                try {
+                    await api.vcard.set(_converse.bare_jid, data);
+                } catch (err) {
+                    log.fatal(err);
+                    this.alert([
+                        __("Sorry, an error happened while trying to save your profile data."),
+                        __("You can check your browser's developer console for any error output.")
+                    ].join(" "));
+                    return;
+                }
                 this.modal.hide();
             },
 
             onFormSubmitted (ev) {
                 ev.preventDefault();
-                const reader = new FileReader(),
-                      form_data = new FormData(ev.target),
-                      image_file = form_data.get('image');
-
+                const reader = new FileReader();
+                const form_data = new FormData(ev.target);
+                const image_file = form_data.get('image');
                 const data = {
                     'fn': form_data.get('fn'),
                     'nickname': form_data.get('nickname'),
@@ -120,14 +104,14 @@ converse.plugins.add('converse-profile', {
                     'url': form_data.get('url'),
                 };
                 if (!image_file.size) {
-                    _.extend(data, {
+                    Object.assign(data, {
                         'image': this.model.vcard.get('image'),
                         'image_type': this.model.vcard.get('image_type')
                     });
                     this.setVCard(data);
                 } else {
                     reader.onloadend = () => {
-                        _.extend(data, {
+                        Object.assign(data, {
                             'image': btoa(reader.result),
                             'image_type': image_file.type
                         });
@@ -139,7 +123,8 @@ converse.plugins.add('converse-profile', {
         });
 
 
-        _converse.ChatStatusModal = _converse.BootstrapModal.extend({
+        _converse.ChatStatusModal = BootstrapModal.extend({
+            id: "modal-status-change",
             events: {
                 "submit form#set-xmpp-status": "onFormSubmitted",
                 "click .clear-input": "clearStatusMessage"
@@ -147,13 +132,13 @@ converse.plugins.add('converse-profile', {
 
             toHTML () {
                 return tpl_chat_status_modal(
-                    _.extend(
+                    Object.assign(
                         this.model.toJSON(),
                         this.model.vcard.toJSON(), {
                         'label_away': __('Away'),
-                        'label_close': __('Close'),
                         'label_busy': __('Busy'),
                         'label_cancel': __('Cancel'),
+                        'label_close': __('Close'),
                         'label_custom_status': __('Custom status'),
                         'label_offline': __('Offline'),
                         'label_online': __('Online'),
@@ -190,61 +175,29 @@ converse.plugins.add('converse-profile', {
             }
         });
 
-        _converse.ClientInfoModal = _converse.BootstrapModal.extend({
-
-            toHTML () {
-                return tpl_client_info_modal(
-                    _.extend(
-                        this.model.toJSON(),
-                        this.model.vcard.toJSON(), {
-                            '__': __,
-                            'modal_title': __('About'),
-                            'version_name': _converse.VERSION_NAME,
-                            'first_subtitle': __( '%1$s Open Source %2$s XMPP chat client brought to you by %3$s Opkode %2$s',
-                                '<a target="_blank" rel="nofollow" href="https://conversejs.org">',
-                                '</a>',
-                                '<a target="_blank" rel="nofollow" href="https://opkode.com">'
-                            ),
-                            'second_subtitle': __('%1$s Translate %2$s it into your own language',
-                                '<a target="_blank" rel="nofollow" href="https://hosted.weblate.org/projects/conversejs/#languages">',
-                                '</a>'
-                            )
-                        }
-                    )
-                );
-            }
-        });
-
-        _converse.XMPPStatusView = _converse.VDOMViewWithAvatar.extend({
+        _converse.XMPPStatusView = _converse.ViewWithAvatar.extend({
             tagName: "div",
             events: {
                 "click a.show-profile": "showProfileModal",
                 "click a.change-status": "showStatusChangeModal",
-                "click .show-client-info": "showClientInfoModal",
                 "click .logout": "logOut"
             },
 
             initialize () {
-                this.model.on("change", this.render, this);
-                this.model.vcard.on("change", this.render, this);
+                this.listenTo(this.model, "change", this.render);
+                this.listenTo(this.model.vcard, "change", this.render);
             },
 
             toHTML () {
                 const chat_status = this.model.get('status') || 'offline';
-                return tpl_profile_view(_.extend(
+                return tpl_profile(Object.assign(
                     this.model.toJSON(),
                     this.model.vcard.toJSON(), {
-                    '__': __,
+                    chat_status,
                     'fullname': this.model.vcard.get('fullname') || _converse.bare_jid,
+                    "showUserSettingsModal": ev => this.showUserSettingsModal(ev),
                     'status_message': this.model.get('status_message') ||
                                         __("I am %1$s", this.getPrettyStatus(chat_status)),
-                    'chat_status': chat_status,
-                    '_converse': _converse,
-                    'title_change_settings': __('Change settings'),
-                    'title_change_status': __('Click to change your chat status'),
-                    'title_log_out': __('Log out'),
-                    'info_details': __('Show details about this chat client'),
-                    'title_your_profile': __('Your profile')
                 }));
             },
 
@@ -253,31 +206,34 @@ converse.plugins.add('converse-profile', {
             },
 
             showProfileModal (ev) {
-                if (_.isUndefined(this.profile_modal)) {
+                ev.preventDefault();
+                if (this.profile_modal === undefined) {
                     this.profile_modal = new _converse.ProfileModal({model: this.model});
                 }
                 this.profile_modal.show(ev);
             },
 
             showStatusChangeModal (ev) {
-                if (_.isUndefined(this.status_modal)) {
+                ev.preventDefault();
+                if (this.status_modal === undefined) {
                     this.status_modal = new _converse.ChatStatusModal({model: this.model});
                 }
                 this.status_modal.show(ev);
             },
 
-            showClientInfoModal(ev) {
-                if (_.isUndefined(this.client_info_modal)) {
-                    this.client_info_modal = new _converse.ClientInfoModal({model: this.model});
+            showUserSettingsModal(ev) {
+                ev.preventDefault();
+                if (this.user_settings_modal === undefined) {
+                    this.user_settings_modal = new UserSettingsModal({model: this.model, _converse});
                 }
-                this.client_info_modal.show(ev);
+                this.user_settings_modal.show(ev);
             },
 
             logOut (ev) {
                 ev.preventDefault();
                 const result = confirm(__("Are you sure you want to log out?"));
                 if (result === true) {
-                    _converse.logOut();
+                    api.user.logout();
                 }
             },
 
@@ -297,6 +253,13 @@ converse.plugins.add('converse-profile', {
                 }
             }
         });
+
+
+        /******************** Event Handlers ********************/
+        api.listen.on('controlBoxPaneInitialized', async view => {
+            await api.waitUntil('VCardsInitialized');
+            _converse.xmppstatusview = new _converse.XMPPStatusView({'model': _converse.xmppstatus});
+            view.el.insertAdjacentElement('afterBegin', _converse.xmppstatusview.render().el);
+        });
     }
 });
-

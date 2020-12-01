@@ -1,16 +1,14 @@
-// Converse.js
-// https://conversejs.org
-//
-// Copyright (c) 2013-2019, the Converse.js developers
-// Licensed under the Mozilla Public License (MPLv2)
-
-import converse from "@converse/headless/converse-core";
+/**
+ * @module converse-oauth
+ * @copyright 2020, the Converse.js contributors
+ * @license Mozilla Public License (MPLv2)
+ */
+import { Collection } from "@converse/skeletor/src/collection";
+import { View } from '@converse/skeletor/src/view.js';
+import { Model } from '@converse/skeletor/src/model.js';
+import { converse } from "@converse/headless/converse-core";
 import hello from "hellojs";
-import tpl_oauth_providers from "templates/oauth_providers.html";
-
-const _ = converse.env._,
-      Backbone = converse.env.Backbone,
-      Strophe = converse.env.Strophe;
+import tpl_oauth_providers from "templates/oauth_providers.js";
 
 
 // The following line registers your plugin.
@@ -30,20 +28,20 @@ converse.plugins.add("converse-oauth", {
      */
     'optional_dependencies': ['converse-register'],
 
-    /* If you want to override some function or a Backbone model or
-     * view defined elsewhere in converse.js, then you do that under
+    /* If you want to override some function or a Model or
+     * View defined elsewhere in converse.js, then you do that under
      * the "overrides" namespace.
      */
     'overrides': {
         /* For example, the private *_converse* object has a
          * method "onConnected". You can override that method as follows:
          */
-        'LoginPanel': {
+        LoginPanel: {
 
             insertOAuthProviders () {
                 const { _converse } = this.__super__;
-                if (_.isUndefined(this.oauth_providers_view)) {
-                    this.oauth_providers_view = 
+                if (this.oauth_providers_view === undefined) {
+                    this.oauth_providers_view =
                         new _converse.OAuthProvidersView({'model': _converse.oauth_providers});
 
                     this.oauth_providers_view.render();
@@ -55,10 +53,11 @@ converse.plugins.add("converse-oauth", {
                 this.oauth_providers_view.render();
             },
 
-            render (cfg) {
+            render () {
                 const { _converse } = this.__super__;
+                const { api } = _converse;
                 const result = this.__super__.render.apply(this, arguments);
-                if (_converse.oauth_providers && !_converse.auto_login) {
+                if (_converse.oauth_providers && !api.settings.get("auto_login")) {
                     this.insertOAuthProviders();
                 }
                 return result;
@@ -70,19 +69,20 @@ converse.plugins.add("converse-oauth", {
         /* The initialize function gets called as soon as the plugin is
          * loaded by converse.js's plugin machinery.
          */
-        const { _converse } = this,
-              { __ } = _converse;
+        const { _converse } = this;
+        const { api } = _converse;
+        const { __ } = _converse;
 
-        _converse.api.settings.update({
-            'oauth_providers': {},
+        api.settings.extend({
+            'oauth_providers': [],
         });
 
-        _converse.OAuthProviders = Backbone.Collection.extend({
-            'sync': __.noop,
+        _converse.OAuthProviders = Collection.extend({
+            'sync': function sync () {},
 
             initialize () {
-                _.each(_converse.user_settings.oauth_providers, (provider) => {
-                    const item = new Backbone.Model(_.extend(provider, {
+                api.settings.get('oauth_providers').forEach(provider => {
+                    const item = new Model(Object.assign(provider, {
                         'login_text': __('Log in with %1$s', provider.name)
                     }));
                     this.add(item, {'silent': true});
@@ -92,27 +92,22 @@ converse.plugins.add("converse-oauth", {
         _converse.oauth_providers = new _converse.OAuthProviders();
 
 
-        _converse.OAuthProvidersView = Backbone.VDOMView.extend({
-            'events': {
-                'click .oauth-login': 'oauthLogin'
-            },
-
+        _converse.OAuthProvidersView = View.extend({
             toHTML () {
                 return tpl_oauth_providers(
-                    _.extend({
-                        '_': _,
-                        '__': _converse.__,
-                        'providers': this.model.toJSON()
+                    Object.assign({
+                        'providers': this.model.toJSON(),
+                        'oauthLogin': ev => this.oauthLogin(ev)
                     }));
             },
 
             async fetchOAuthProfileDataAndLogin () {
                 const profile = await this.oauth_service.api('me');
                 const response = this.oauth_service.getAuthResponse();
-                _converse.api.user.login({
-                    'jid': `${profile.name}@${this.provider.get('host')}`,
-                    'password': response.access_token
-                });
+                api.user.login(
+                    `${profile.name}@${this.provider.get('host')}`,
+                    response.access_token
+                );
             },
 
             async oauthLogin (ev) {

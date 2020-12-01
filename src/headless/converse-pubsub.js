@@ -1,13 +1,13 @@
-// Converse.js
-// https://conversejs.org
-//
-// Copyright (c) 2019, the Converse.js developers
-// Licensed under the Mozilla Public License (MPLv2)
-
+/**
+ * @module converse-pubsub
+ * @copyright The Converse.js contributors
+ * @license Mozilla Public License (MPLv2)
+ */
 import "./converse-disco";
-import converse from "./converse-core";
+import { _converse, api, converse } from "./converse-core";
+import log from "./log";
 
-const { Strophe, Backbone, Promise, $iq, $build, $msg, $pres, f, moment, _ } = converse.env;
+const { Strophe, $iq } = converse.env;
 
 Strophe.addNamespace('PUBSUB_ERROR', Strophe.NS.PUBSUB+"#errors");
 
@@ -17,16 +17,10 @@ converse.plugins.add('converse-pubsub', {
     dependencies: ["converse-disco"],
 
     initialize () {
-        /* The initialize function gets called as soon as the plugin is
-         * loaded by converse.js's plugin machinery.
-         */
-        const { _converse } = this,
-              { __ } = _converse;
-
 
         /************************ BEGIN API ************************/
         // We extend the default converse.js API to add methods specific to MUC groupchats.
-        _.extend(_converse.api, {
+        Object.assign(_converse.api, {
             /**
              * The "pubsub" namespace groups methods relevant to PubSub
              *
@@ -59,8 +53,7 @@ converse.plugins.add('converse-pubsub', {
 
                     if (options) {
                         jid = jid || _converse.bare_jid;
-                        const result = await _converse.api.disco.supports(Strophe.NS.PUBSUB + '#publish-options', jid);
-                        if (result.length) {
+                        if (await api.disco.supports(Strophe.NS.PUBSUB + '#publish-options', jid)) {
                             stanza.c('publish-options')
                                 .c('x', {'xmlns': Strophe.NS.XFORM, 'type': 'submit'})
                                     .c('field', {'var': 'FORM_TYPE', 'type': 'hidden'})
@@ -68,12 +61,12 @@ converse.plugins.add('converse-pubsub', {
 
                             Object.keys(options).forEach(k => stanza.c('field', {'var': k}).c('value').t(options[k]).up().up());
                         } else {
-                            _converse.log(`_converse.api.publish: ${jid} does not support #publish-options, `+
-                                          `so we didn't set them even though they were provided.`)
+                            log.warn(`_converse.api.publish: ${jid} does not support #publish-options, `+
+                                     `so we didn't set them even though they were provided.`)
                         }
                     }
                     try {
-                        _converse.api.sendIQ(stanza);
+                        await api.sendIQ(stanza);
                     } catch (iq) {
                         if (iq instanceof Element &&
                                 strict_options &&
@@ -83,11 +76,8 @@ converse.plugins.add('converse-pubsub', {
                             // met. We re-publish but without publish-options.
                             const el = stanza.nodeTree;
                             el.querySelector('publish-options').outerHTML = '';
-                            _converse.log(
-                                `PubSub: Republishing without publish options. ${el.outerHTML}`,
-                                Strophe.LogLevel.WARN
-                            );
-                            _converse.api.sendIQ(el);
+                            log.warn(`PubSub: Republishing without publish options. ${el.outerHTML}`);
+                            await api.sendIQ(el);
                         } else {
                             throw iq;
                         }
